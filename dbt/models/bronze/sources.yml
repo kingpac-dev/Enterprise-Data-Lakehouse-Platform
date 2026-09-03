@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: bronze_raw
+    database: raw
+    schema: raw
+    tables:
+      - name: orders_landing
+        description: "Source-aligned raw landing orders table"
+        columns:
+          - name: order_id
+            description: "Primary business order key"
+            tests:
+              - not_null
+          - name: _source_system
+            description: "Originating source system identifier"
+            tests:
+              - not_null
+          - name: _ingested_at
+            description: "Platform ingestion timestamp"
+            tests:
+              - not_null

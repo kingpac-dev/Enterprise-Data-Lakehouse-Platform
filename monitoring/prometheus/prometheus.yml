@@ -1,0 +1,44 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "/etc/prometheus/alert_rules.yml"
+
+scrape_configs:
+  # ----------------------------------------------------------------------------
+  # ClickHouse Native Prometheus Exporter
+  # ----------------------------------------------------------------------------
+  - job_name: "clickhouse"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "clickhouse:9363"
+          - "clickhouse-01:9363"
+          - "clickhouse-02:9363"
+        labels:
+          role: "analytics-engine"
+
+  # ----------------------------------------------------------------------------
+  # ClickHouse Keeper Coordination Exporter
+  # ----------------------------------------------------------------------------
+  - job_name: "clickhouse-keeper"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "keeper-01:9181"
+          - "keeper-02:9181"
+          - "keeper-03:9181"
+        labels:
+          role: "consensus-quorum"
+
+  # ----------------------------------------------------------------------------
+  # MinIO Object Storage Exporter
+  # ----------------------------------------------------------------------------
+  - job_name: "minio"
+    metrics_path: "/minio/v2/metrics/cluster"
+    static_configs:
+      - targets:
+          - "minio:9000"
+        labels:
+          role: "lake-storage"

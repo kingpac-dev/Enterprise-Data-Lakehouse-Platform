@@ -1,0 +1,60 @@
+<clickhouse>
+    <users>
+        <!-- Default admin user with credentials injected via environment variables -->
+        <admin>
+            <password from_env="CLICKHOUSE_ADMIN_PASSWORD">change_this_admin_password_in_prod</password>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>admin_profile</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </admin>
+
+        <!-- Service Accounts -->
+        <etl_user>
+            <password from_env="CLICKHOUSE_ETL_PASSWORD">change_this_etl_password_in_prod</password>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>etl_profile</profile>
+            <quota>default</quota>
+            <access_management>0</access_management>
+        </etl_user>
+
+        <bi_user>
+            <password from_env="CLICKHOUSE_BI_PASSWORD">change_this_bi_password_in_prod</password>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>bi_profile</profile>
+            <quota>bi_quota</quota>
+            <access_management>0</access_management>
+        </bi_user>
+
+        <api_user>
+            <password from_env="CLICKHOUSE_API_PASSWORD">change_this_api_password_in_prod</password>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>api_profile</profile>
+            <quota>api_quota</quota>
+            <access_management>0</access_management>
+        </api_user>
+
+        <monitoring_user>
+            <password from_env="CLICKHOUSE_MONITORING_PASSWORD">change_this_monitoring_password_in_prod</password>
+            <networks>
+                <ip>::/0</ip>
+                <ip>0.0.0.0/0</ip>
+            </networks>
+            <profile>readonly_profile</profile>
+            <quota>default</quota>
+            <access_management>0</access_management>
+        </monitoring_user>
+    </users>
+</clickhouse>

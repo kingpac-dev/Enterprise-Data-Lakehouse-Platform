@@ -1,0 +1,68 @@
+<clickhouse>
+    <profiles>
+        <!-- Administrator Profile: Unrestricted for administrative operations -->
+        <admin_profile>
+            <max_memory_usage>34359738368</max_memory_usage> <!-- 32 GB -->
+            <use_uncompressed_cache>1</use_uncompressed_cache>
+            <load_balancing>random</load_balancing>
+            <log_queries>1</log_queries>
+        </admin_profile>
+
+        <!-- ETL Profile: Optimized for large batch insertions -->
+        <etl_profile>
+            <max_memory_usage>17179869184</max_memory_usage> <!-- 16 GB -->
+            <max_partitions_per_insert_block>100</max_partitions_per_insert_block>
+            <async_insert>1</async_insert>
+            <wait_for_async_insert>1</wait_for_async_insert>
+            <async_insert_busy_timeout_ms>200</async_insert_busy_timeout_ms>
+            <log_queries>1</log_queries>
+        </etl_profile>
+
+        <!-- BI Profile: Guardrails against runaway analytical queries -->
+        <bi_profile>
+            <max_memory_usage>8589934592</max_memory_usage> <!-- 8 GB per query max -->
+            <max_execution_time>60</max_execution_time> <!-- 60s timeout -->
+            <readonly>1</readonly>
+            <log_queries>1</log_queries>
+        </bi_profile>
+
+        <!-- API Profile: Strict sub-second timeout limits -->
+        <api_profile>
+            <max_memory_usage>2147483648</max_memory_usage> <!-- 2 GB max -->
+            <max_execution_time>10</max_execution_time> <!-- 10s timeout -->
+            <readonly>1</readonly>
+            <log_queries>1</log_queries>
+        </api_profile>
+
+        <!-- Readonly Profile: Monitoring & safe inspection -->
+        <readonly_profile>
+            <max_memory_usage>1073741824</max_memory_usage> <!-- 1 GB -->
+            <max_execution_time>30</max_execution_time>
+            <readonly>1</readonly>
+        </readonly_profile>
+    </profiles>
+
+    <quotas>
+        <!-- BI Quota: Limits resource consumption per hour -->
+        <bi_quota>
+            <interval>
+                <duration>3600</duration>
+                <queries>1000</queries>
+                <errors>100</errors>
+                <result_rows>10000000</result_rows>
+                <read_rows>1000000000</read_rows>
+                <execution_time>3600</execution_time>
+            </interval>
+        </bi_quota>
+
+        <!-- API Quota: Limits request rate per hour -->
+        <api_quota>
+            <interval>
+                <duration>3600</duration>
+                <queries>10000</queries>
+                <errors>500</errors>
+                <execution_time>1800</execution_time>
+            </interval>
+        </api_quota>
+    </quotas>
+</clickhouse>

@@ -1,0 +1,175 @@
+name: enterprise-lakehouse-dev
+
+# ==============================================================================
+# DEV / UAT Single-Host Stack (Evaluation & Benchmark Baseline)
+# NOTE: This single-host topology is NOT high availability (HA).
+# ==============================================================================
+
+networks:
+  data_backend:
+    driver: bridge
+  data_storage:
+    driver: bridge
+  observability:
+    driver: bridge
+  management:
+    driver: bridge
+
+volumes:
+  clickhouse_dev_data:
+  clickhouse_dev_logs:
+  minio_dev_data:
+  portainer_dev_data:
+  prometheus_dev_data:
+  grafana_dev_data:
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. S3-Compatible Lake Storage (MinIO)
+  # ----------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-08-17T01-24-54Z
+    container_name: lakehouse-minio
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT:-9001}"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-lakehouse_s3_access_key}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-lakehouse_s3_secret_change_me}
+    ports:
+      - "${S3_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_dev_data:/data
+    networks:
+      - data_storage
+      - management
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Bucket Initializer for Lakehouse Medallion Paths
+  minio-init:
+    image: minio/mc:RELEASE.2024-08-13T06-03-34Z
+    container_name: lakehouse-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 ${S3_ACCESS_KEY:-lakehouse_s3_access_key} ${S3_SECRET_KEY:-lakehouse_s3_secret_change_me};
+      mc mb --ignore-existing myminio/${S3_BUCKET_LAKE:-enterprise-data-lake};
+      mc anonymous set none myminio/${S3_BUCKET_LAKE:-enterprise-data-lake};
+      echo 'MinIO buckets initialized successfully.';
+      exit 0;
+      "
+    networks:
+      - data_storage
+
+  # ----------------------------------------------------------------------------
+  # 2. ClickHouse Analytics & Serving Engine (26.8 LTS)
+  # ----------------------------------------------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8
+    container_name: lakehouse-clickhouse-dev
+    depends_on:
+      minio:
+        condition: service_healthy
+    ports:
+      - "${CLICKHOUSE_PORT_HTTP:-8123}:8123"
+      - "${CLICKHOUSE_PORT_NATIVE:-9000}:9000"
+      - "${CLICKHOUSE_PORT_PROMETHEUS:-9363}:9363"
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_ADMIN_USER:-admin}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-change_this_admin_password_in_prod}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-1}
+    volumes:
+      - clickhouse_dev_data:/var/lib/clickhouse
+      - clickhouse_dev_logs:/var/log/clickhouse-server
+      - ../clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      - ../clickhouse/users.d:/etc/clickhouse-server/users.d:ro
+      - ../sql/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          cpus: "${CLICKHOUSE_CPU_LIMIT:-4}"
+          memory: "${CLICKHOUSE_MEMORY_LIMIT:-8G}"
+        reservations:
+          memory: "${CLICKHOUSE_MEMORY_RESERVATION:-4G}"
+    networks:
+      - data_backend
+      - data_storage
+      - observability
+      - management
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 3. Operations & Stack Management (Portainer)
+  # ----------------------------------------------------------------------------
+  portainer:
+    image: portainer/portainer-ce:2.21.0
+    container_name: lakehouse-portainer-dev
+    command: -H unix:///var/run/docker.sock
+    ports:
+      - "${PORTAINER_PORT_HTTP:-9002}:9000"
+      - "${PORTAINER_PORT_HTTPS:-9443}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_dev_data:/data
+    networks:
+      - management
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 4. Observability: Prometheus
+  # ----------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: lakehouse-prometheus-dev
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_dev_data:/prometheus
+    networks:
+      - observability
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 5. Observability: Grafana
+  # ----------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: lakehouse-grafana-dev
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change_this_grafana_password_in_prod}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_dev_data:/var/lib/grafana
+    networks:
+      - observability
+      - management
+    restart: unless-stopped

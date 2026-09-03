@@ -1,0 +1,26 @@
+name: 'enterprise_data_lakehouse'
+version: '1.0.0'
+config-version: 2
+
+# Profile defined in ~/.dbt/profiles.yml or dbt/profiles.yml
+profile: 'lakehouse_profile'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  enterprise_data_lakehouse:
+    silver:
+      +materialized: table
+      +schema: core
+    gold:
+      +materialized: table
+      +schema: mart

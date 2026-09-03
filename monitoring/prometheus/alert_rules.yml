@@ -1,0 +1,68 @@
+groups:
+  - name: clickhouse_alerts
+    rules:
+      # Alert 1: High Query Error Rate
+      - alert: ClickHouseHighQueryErrors
+        expr: rate(ClickHouseAsyncMetrics_FailedQuery[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ClickHouse query failure rate elevated"
+          description: "ClickHouse instance is experiencing > 5 failed queries per second over 5 minutes."
+          runbook_url: "runbooks/03_troubleshooting_and_failover.md#query-errors"
+
+      # Alert 2: Memory Limit Exceeded
+      - alert: ClickHouseMemoryPressure
+        expr: ClickHouseMetrics_MemoryTracking / (1024 * 1024 * 1024) > 28
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ClickHouse approaching host memory limit"
+          description: "ClickHouse memory consumption exceeded 28 GB."
+          runbook_url: "runbooks/03_troubleshooting_and_failover.md#memory-exhaustion"
+
+      # Alert 3: Too Many Active Parts (Merge Backlog)
+      - alert: ClickHousePartsExplosion
+        expr: ClickHouseAsyncMetrics_PartsActive > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ClickHouse active parts count high"
+          description: "Active parts in ClickHouse exceeded 300, indicating small batch insert pollution or merge backlog."
+          runbook_url: "runbooks/03_troubleshooting_and_failover.md#parts-explosion"
+
+      # Alert 4: Replication Queue Lag
+      - alert: ClickHouseReplicationQueueLag
+        expr: ClickHouseAsyncMetrics_ReplicasMaxQueueSize > 50
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ClickHouse replica synchronization lag"
+          description: "Replication queue size > 50 parts for more than 5 minutes."
+          runbook_url: "runbooks/03_troubleshooting_and_failover.md#replication-lag"
+
+      # Alert 5: Keeper Quorum Degradation
+      - alert: ClickHouseKeeperQuorumDegraded
+        expr: count(up{job="clickhouse-keeper"} == 1) < 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ClickHouse Keeper quorum lost or degraded"
+          description: "Fewer than 2 Keeper nodes are healthy. Raft quorum is broken."
+          runbook_url: "runbooks/03_troubleshooting_and_failover.md#keeper-quorum-loss"
+
+      # Alert 6: Backup Overdue (>24 hours)
+      - alert: ClickHouseBackupOverdue
+        expr: (time() - ClickHouseAsyncMetrics_LastSuccessfulBackupTimestamp) > 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "ClickHouse automated backup overdue"
+          description: "No successful ClickHouse backup recorded in the last 24 hours."
+          runbook_url: "runbooks/02_backup_and_restore_operations.md"
