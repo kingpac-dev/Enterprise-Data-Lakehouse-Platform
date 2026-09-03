@@ -1,0 +1,14 @@
+<clickhouse>
+    <!-- Network Listen Configuration -->
+    <!-- Listen on all container interfaces within isolated Docker network -->
+    <listen_host>::</listen_host>
+    <listen_host>0.0.0.0</listen_host>
+
+    <http_port>8123</http_port>
+    <tcp_port>9000</tcp_port>
+    <interserver_http_port>9009</interserver_http_port>
+
+    <!-- Maximum connection limits to protect memory -->
+    <max_connections>1024</max_connections>
+    <keep_alive_timeout>10</keep_alive_timeout>
+</clickhouse>

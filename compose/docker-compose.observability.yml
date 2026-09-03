@@ -1,0 +1,79 @@
+name: enterprise-lakehouse-observability
+
+# ==============================================================================
+# Standalone Observability Stack (Prometheus, Grafana, Loki)
+# Can be run on a dedicated management host or alongside DEV/UAT
+# ==============================================================================
+
+networks:
+  observability:
+    driver: bridge
+  management:
+    driver: bridge
+
+volumes:
+  prometheus_prod_data:
+  grafana_prod_data:
+  loki_prod_data:
+
+services:
+  # ----------------------------------------------------------------------------
+  # Prometheus Metrics Engine
+  # ----------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: lakehouse-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_prod_data:/prometheus
+    networks:
+      - observability
+    restart: always
+
+  # ----------------------------------------------------------------------------
+  # Grafana Visualization & Dashboards
+  # ----------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: lakehouse-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-clickhouse-datasource"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_prod_data:/var/lib/grafana
+    networks:
+      - observability
+      - management
+    restart: always
+
+  # ----------------------------------------------------------------------------
+  # Loki Structured Log Aggregation
+  # ----------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: lakehouse-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ../monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_prod_data:/loki
+    networks:
+      - observability
+    restart: always

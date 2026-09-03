@@ -1,0 +1,16 @@
+lakehouse_profile:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT_NATIVE', 9000) | int }}"
+      user: "{{ env_var('CLICKHOUSE_ADMIN_USER', 'admin') }}"
+      password: "{{ env_var('CLICKHOUSE_ADMIN_PASSWORD', 'change_this_admin_password_in_prod') }}"
+      database: "raw"
+      schema: "core"
+      secure: false
+      verify: false
+      connect_timeout: 10
+      send_receive_timeout: 300
+      cluster: "cluster_1s_2r"

@@ -1,0 +1,31 @@
+<clickhouse>
+    <!--
+      Distributed Cluster Definition:
+      1 Shard x 2 Replicas baseline (HA topology)
+    -->
+    <remote_servers>
+        <cluster_1s_2r>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>clickhouse-01</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>clickhouse-02</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster_1s_2r>
+    </remote_servers>
+
+    <!-- Default cluster for distributed DDL queries (ON CLUSTER) -->
+    <default_cluster>cluster_1s_2r</default_cluster>
+
+    <!-- Macros used by ReplicatedMergeTree tables -->
+    <macros>
+        <cluster>cluster_1s_2r</cluster>
+        <shard from_env="CLICKHOUSE_SHARD">1</shard>
+        <replica from_env="CLICKHOUSE_REPLICA">1</replica>
+    </macros>
+</clickhouse>

@@ -1,0 +1,105 @@
+name: enterprise-lakehouse-prod-node1
+
+# ==============================================================================
+# PROD Node 1: ClickHouse Replica 01 + ClickHouse Keeper 01
+# Deployed on Host 01 (Independent failure domain)
+# ==============================================================================
+
+networks:
+  data_backend:
+    driver: bridge
+  data_storage:
+    driver: bridge
+  observability:
+    driver: bridge
+  management:
+    driver: bridge
+
+volumes:
+  clickhouse_node1_data:
+  clickhouse_node1_logs:
+  keeper_node1_data:
+  portainer_agent_data:
+
+services:
+  # ----------------------------------------------------------------------------
+  # Keeper Member 1 (Coordination Quorum)
+  # ----------------------------------------------------------------------------
+  keeper-01:
+    image: clickhouse/clickhouse-keeper:26.8-alpine
+    container_name: lakehouse-keeper-01
+    ports:
+      - "9181:9181"   # Client port
+      - "9234:9234"   # Raft peer port
+    volumes:
+      - keeper_node1_data:/var/lib/clickhouse-keeper
+      - ../clickhouse/config.d/keeper_config.xml:/etc/clickhouse-keeper/keeper_config.xml:ro
+    networks:
+      - data_backend
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  # ----------------------------------------------------------------------------
+  # ClickHouse Server Replica 1
+  # ----------------------------------------------------------------------------
+  clickhouse-01:
+    image: clickhouse/clickhouse-server:26.8
+    container_name: lakehouse-clickhouse-01
+    depends_on:
+      keeper-01:
+        condition: service_healthy
+    ports:
+      - "8123:8123"   # HTTP
+      - "9000:9000"   # Native TCP
+      - "9363:9363"   # Prometheus Metrics
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_ADMIN_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_node1_data:/var/lib/clickhouse
+      - clickhouse_node1_logs:/var/log/clickhouse-server
+      - ../clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      - ../clickhouse/users.d:/etc/clickhouse-server/users.d:ro
+      - ../sql/init:/docker-entrypoint-initdb.d:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          cpus: "16"
+          memory: "64G"
+        reservations:
+          memory: "32G"
+    networks:
+      - data_backend
+      - data_storage
+      - observability
+      - management
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  # ----------------------------------------------------------------------------
+  # Portainer Edge / Standard Agent for Centralized Management
+  # ----------------------------------------------------------------------------
+  portainer-agent:
+    image: portainer/agent:2.21.0
+    container_name: portainer-agent-node1
+    ports:
+      - "9001:9001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      - management
+    restart: always
