@@ -1,0 +1,44 @@
+{
+  "run_id": "run_20260904_051011",
+  "timestamp": "2026-09-04T05:10:11.406595+00:00",
+  "status": "SUCCESS",
+  "total_duration_sec": 0.0,
+  "dry_run": true,
+  "steps": [
+    {
+      "name": "INGESTION",
+      "status": "SUCCESS (DRY_RUN)",
+      "duration_sec": 0.05,
+      "description": "Ingest batch records into S3 Parquet landing & ClickHouse raw tables",
+      "error": null
+    },
+    {
+      "name": "TRANSFORMATION",
+      "status": "SUCCESS (DRY_RUN)",
+      "duration_sec": 0.05,
+      "description": "Execute dbt models: raw.orders_landing -> core.dim_* & mart.fact_sales",
+      "error": null
+    },
+    {
+      "name": "DATA_TESTS",
+      "status": "SUCCESS (DRY_RUN)",
+      "duration_sec": 0.05,
+      "description": "Assert schema integrity, positive values, and uniqueness in dbt models",
+      "error": null
+    },
+    {
+      "name": "RECONCILIATION",
+      "status": "SUCCESS (DRY_RUN)",
+      "duration_sec": 0.05,
+      "description": "Cross-layer row count reconciliation and Data Quality Score calculation",
+      "error": null
+    },
+    {
+      "name": "BACKUP",
+      "status": "SUCCESS (DRY_RUN)",
+      "duration_sec": 0.05,
+      "description": "Trigger ClickHouse partition snapshot to S3 backup bucket",
+      "error": null
+    }
+  ]
+}

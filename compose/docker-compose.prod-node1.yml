@@ -31,6 +31,14 @@ services:
     ports:
       - "9181:9181"   # Client port
       - "9234:9234"   # Raft peer port
+    environment:
+      KEEPER_SERVER_ID: 1
+    extra_hosts:
+      - "keeper-01:${HOST_NODE1_IP:-127.0.0.1}"
+      - "keeper-02:${HOST_NODE2_IP:-127.0.0.1}"
+      - "keeper-03:${HOST_NODE3_IP:-127.0.0.1}"
+      - "clickhouse-01:${HOST_NODE1_IP:-127.0.0.1}"
+      - "clickhouse-02:${HOST_NODE2_IP:-127.0.0.1}"
     volumes:
       - keeper_node1_data:/var/lib/clickhouse-keeper
       - ../clickhouse/config.d/keeper_config.xml:/etc/clickhouse-keeper/keeper_config.xml:ro
@@ -55,11 +63,20 @@ services:
     ports:
       - "8123:8123"   # HTTP
       - "9000:9000"   # Native TCP
+      - "9009:9009"   # Interserver data replication sync
       - "9363:9363"   # Prometheus Metrics
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_ADMIN_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_SHARD: ${CLICKHOUSE_SHARD:-1}
+      CLICKHOUSE_REPLICA: ${CLICKHOUSE_REPLICA:-1}
+    extra_hosts:
+      - "keeper-01:${HOST_NODE1_IP:-127.0.0.1}"
+      - "keeper-02:${HOST_NODE2_IP:-127.0.0.1}"
+      - "keeper-03:${HOST_NODE3_IP:-127.0.0.1}"
+      - "clickhouse-01:${HOST_NODE1_IP:-127.0.0.1}"
+      - "clickhouse-02:${HOST_NODE2_IP:-127.0.0.1}"
     volumes:
       - clickhouse_node1_data:/var/lib/clickhouse
       - clickhouse_node1_logs:/var/log/clickhouse-server

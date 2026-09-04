@@ -1,0 +1,131 @@
+# ==============================================================================
+# Enterprise Data Lakehouse Platform - Open Data Contract Specification (M08)
+# ==============================================================================
+# Format: Open Data Contract Standard (ODCS) v2.2.0
+# Entity: E-Commerce & Retail Orders
+# Target Dataset: raw.orders_landing
+# ==============================================================================
+
+version: "2.2.0"
+dataset: "raw.orders_landing"
+domain: "sales_and_commerce"
+status: "active"
+effective_date: "2026-09-04"
+
+owner:
+  team: "data-platform-engineering"
+  email: "data-ops@enterprise.internal"
+  slack_channel: "#lakehouse-alerts"
+
+sla:
+  update_frequency: "hourly_batch_and_near_realtime_stream"
+  max_freshness_delay_minutes: 60
+  availability_target: "99.9%"
+  data_quality_score_minimum: 98.0
+
+schema:
+  primary_keys:
+    - "order_id"
+    - "order_timestamp"
+
+  columns:
+    - name: "order_id"
+      type: "UInt64"
+      nullable: false
+      unique: true
+      description: "Globally unique positive order transaction identifier."
+
+    - name: "customer_id"
+      type: "UInt64"
+      nullable: false
+      description: "Identifier linking to core.dim_customer."
+
+    - name: "order_timestamp"
+      type: "DateTime64(3)"
+      nullable: false
+      description: "Timestamp when the transaction occurred at source."
+
+    - name: "branch_id"
+      type: "UInt32"
+      nullable: false
+      description: "Store/Branch identifier between 1 and 1000."
+      rules:
+        min: 1
+        max: 1000
+
+    - name: "product_id"
+      type: "UInt64"
+      nullable: false
+      description: "SKU or Product identifier linking to core.dim_product."
+
+    - name: "unit_price"
+      type: "Decimal(18, 2)"
+      nullable: false
+      description: "Unit price of item. Must be strictly positive."
+      rules:
+        min: 0.01
+
+    - name: "quantity"
+      type: "Decimal(18, 3)"
+      nullable: false
+      description: "Order quantity. Must be greater than zero."
+      rules:
+        min: 0.001
+
+    - name: "discount"
+      type: "Decimal(18, 2)"
+      nullable: false
+      description: "Discount amount applied to item. Cannot be negative."
+      rules:
+        min: 0.0
+
+    - name: "status"
+      type: "LowCardinality(String)"
+      nullable: false
+      description: "Lifecycle status of the order transaction."
+      allowed_values:
+        - "COMPLETED"
+        - "PENDING"
+        - "CANCELLED"
+
+    - name: "raw_payload"
+      type: "String"
+      nullable: true
+      description: "Optional raw source JSON document."
+
+    # Mandatory 7 Technical Ingestion Metadata Columns
+    - name: "_source_system"
+      type: "LowCardinality(String)"
+      nullable: false
+      description: "Source application identifier (e.g. pos_system, ecom_web)."
+
+    - name: "_source_table"
+      type: "LowCardinality(String)"
+      nullable: false
+      description: "Origin source table name."
+
+    - name: "_ingested_at"
+      type: "DateTime64(3)"
+      nullable: false
+      description: "System timestamp when row was loaded into ClickHouse."
+
+    - name: "_source_updated_at"
+      type: "DateTime64(3)"
+      nullable: false
+      description: "CDC timestamp when row was modified at source."
+
+    - name: "_batch_id"
+      type: "String"
+      nullable: false
+      description: "Unique ETL / Ingestion batch identifier."
+
+    - name: "_record_hash"
+      type: "FixedString(32)"
+      nullable: false
+      description: "MD5 checksum of business attributes for change detection."
+
+    - name: "_is_deleted"
+      type: "UInt8"
+      nullable: false
+      allowed_values: [0, 1]
+      description: "CDC Tombstone indicator (1 = Deleted, 0 = Active)."

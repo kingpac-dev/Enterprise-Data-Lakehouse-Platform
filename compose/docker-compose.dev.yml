@@ -173,3 +173,49 @@ services:
       - observability
       - management
     restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # 6. Data Transformation: dbt-runner (On-Demand Profile)
+  # ----------------------------------------------------------------------------
+  dbt-runner:
+    profiles: ["tools"]
+    build:
+      context: ../dbt
+      dockerfile: Dockerfile
+    container_name: lakehouse-dbt-runner
+    depends_on:
+      - clickhouse
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT_NATIVE: 9000
+      CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_ADMIN_USER:-admin}
+      CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-change_this_admin_password_in_prod}
+    volumes:
+      - ../dbt:/usr/app/dbt
+    networks:
+      - data_backend
+
+  # ----------------------------------------------------------------------------
+  # 7. Serving REST API Microservice (On-Demand Profile)
+  # ----------------------------------------------------------------------------
+  serving-api:
+    profiles: ["api"]
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: lakehouse-serving-api
+    depends_on:
+      - clickhouse
+    ports:
+      - "8000:8000"
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT_HTTP: 8123
+      CLICKHOUSE_API_USER: api_user
+      CLICKHOUSE_API_PASSWORD: ${CLICKHOUSE_API_PASSWORD:-change_this_api_password_in_prod}
+    networks:
+      - data_backend
+      - management
+    restart: unless-stopped
+
+
