@@ -1,0 +1,65 @@
+name: Platform CI & Governance Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  validate:
+    name: Lint, Compose & Governance Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Linting & Parsing Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml flake8
+
+      - name: Validate Docker Compose V2 Syntax
+        run: |
+          docker compose -f compose/docker-compose.dev.yml config > /dev/null
+          docker compose -f compose/docker-compose.prod-node1.yml config > /dev/null
+          docker compose -f compose/docker-compose.prod-node2.yml config > /dev/null
+          docker compose -f compose/docker-compose.prod-keeper3.yml config > /dev/null
+          docker compose -f compose/docker-compose.observability.yml config > /dev/null
+          echo "All Docker Compose configurations are valid."
+
+      - name: Validate ClickHouse XML Configuration Syntax
+        run: |
+          python -c "
+          import xml.etree.ElementTree as ET, glob, sys
+          for f in glob.glob('clickhouse/**/*.xml', recursive=True):
+              try:
+                  ET.parse(f)
+                  print(f'Valid XML: {f}')
+              except Exception as e:
+                  print(f'Invalid XML: {f}: {e}', file=sys.stderr)
+                  sys.exit(1)
+          "
+
+      - name: Zero-Trust Secret Scanning Check
+        run: |
+          echo "Scanning for hardcoded secrets..."
+          # Fail if private keys or un-parameterized passwords exist outside of example files
+          if grep -rnE --exclude-dir={.git,docs} "(BEGIN PRIVATE KEY|password\s*[:=]\s*['\"][^$]{8,})" . | grep -v -E "(\.example|change_this|admin_profile|minio_dev)"; then
+            echo "Security Error: Hardcoded secret pattern detected!"
+            exit 1
+          fi
+          echo "No hardcoded secrets detected."
+
+      - name: Python Script Syntax & Compilation Check
+        run: |
+          python -m py_compile ingestion/sample_ingestion.py
+          python -m py_compile scripts/smoke_test.py
+          python -m py_compile scripts/benchmark_queries.py
+          echo "All Python scripts passed compilation."

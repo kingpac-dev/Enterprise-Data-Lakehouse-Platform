@@ -1,0 +1,71 @@
+# ==============================================================================
+# Enterprise Semantic Metrics Catalog
+# ==============================================================================
+# Central definition of business KPIs, dimensions, and official formulas.
+# Governed by: A02 Data Architect & A10 BI Data Product Analyst
+# ==============================================================================
+version: 1
+
+metrics:
+  - name: net_revenue
+    label: "Net Sales Revenue"
+    description: "Total revenue recognized after deducting line discounts and excluding cancelled orders."
+    type: sum
+    sql: "round(sum(amount), 2)"
+    source_table: "mart.fact_sales"
+    default_serving_view: "serving.v_daily_branch_sales"
+    serving_column: "total_revenue"
+    unit: "THB"
+
+  - name: total_orders
+    label: "Total Completed Orders"
+    description: "Count of unique valid customer transactions excluding cancelled/voided orders."
+    type: count
+    sql: "count(distinct order_id)"
+    source_table: "mart.fact_sales"
+    default_serving_view: "serving.v_daily_branch_sales"
+    serving_column: "total_orders"
+    unit: "Orders"
+
+  - name: total_units_sold
+    label: "Total Units Sold"
+    description: "Sum of product quantities delivered across all line items."
+    type: sum
+    sql: "sum(quantity)"
+    source_table: "mart.fact_sales"
+    default_serving_view: "serving.v_daily_branch_sales"
+    serving_column: "total_quantity"
+    unit: "Units"
+
+  - name: average_order_value
+    label: "Average Order Value (AOV)"
+    description: "Net revenue divided by completed order count."
+    type: formula
+    sql: "round(sum(amount) / nullif(count(distinct order_id), 0), 2)"
+    source_table: "mart.fact_sales"
+    unit: "THB"
+
+  - name: active_customers
+    label: "Unique Active Customers"
+    description: "Count of distinct active customers who made at least one purchase in the period."
+    type: count_distinct
+    sql: "uniqExact(customer_id)"
+    source_table: "mart.fact_sales"
+    default_serving_view: "serving.v_daily_branch_sales"
+    serving_column: "unique_customers"
+    unit: "Customers"
+
+dimensions:
+  - name: sale_date
+    label: "Transaction Date"
+    sql: "sale_date"
+    type: date
+  - name: branch_id
+    label: "Operating Branch ID"
+    sql: "branch_id"
+    type: integer
+  - name: product_category
+    label: "Product Category"
+    sql: "p.category"
+    type: string
+    join: "JOIN core.dim_product AS p ON mart.fact_sales.product_id = p.product_id"

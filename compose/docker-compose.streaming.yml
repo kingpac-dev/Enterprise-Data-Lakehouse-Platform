@@ -1,0 +1,56 @@
+# ==============================================================================
+# Enterprise Data Lakehouse Platform - Real-Time Streaming Stack (M02)
+# ==============================================================================
+# Architecture: Redpanda (Kafka-compatible, ultra-low footprint, zero-ZooKeeper)
+# + Redpanda Console (Real-time message & consumer inspection UI)
+# ==============================================================================
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.14
+    container_name: lakehouse-redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    networks:
+      - lakehouse-net
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'HEALTHY'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    container_name: lakehouse-redpanda-console
+    environment:
+      KAFKA_BROKERS: "redpanda:29092"
+    ports:
+      - "8088:8080"
+    networks:
+      - lakehouse-net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+networks:
+  lakehouse-net:
+    name: lakehouse-dev-net
+    external: true
+
+volumes:
+  redpanda_data:
+    name: lakehouse-redpanda-data

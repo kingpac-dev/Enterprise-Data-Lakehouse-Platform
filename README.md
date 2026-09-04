@@ -19,6 +19,14 @@
 - **dbt-clickhouse**: ควบคุมการแปลงข้อมูลตามสถาปัตยกรรมเหรียญรางวัล (Medallion Architecture)
 - **Prometheus + Grafana + Loki**: ระบบ Observability สำหรับตรวจสอบสถานะและแจ้งเตือนตาม Runbook
 
+### 📚 เอกสารและคู่มือการใช้งานระบบ (Key Documentation)
+- 📘 **[คู่มือการพัฒนาระบบ (Developer Guide)](docs/DEVELOPER_GUIDE.md)**: สถาปัตยกรรม, การเขียน DDL, การพัฒนา dbt models, การต่อ Ingestion, และ AI Prompt Template
+- 📕 **[คู่มือการติดตั้งและการใช้งานจริง (Operations & User Manual)](docs/OPERATIONS_MANUAL.md)**: การเตรียมเครื่อง, การติดตั้งบน Ubuntu 24 LTS, การบริหาร Portainer, การต่อ Power BI/DBeaver, และการกู้คืน DR
+- 🗺️ **[พจนานุกรมข้อมูลและผังสายธารข้อมูล (Data Catalog & Lineage)](docs/DATA_CATALOG.md)**: Interactive Mermaid Data Lineage, Table Dictionary, SLA, PII Classification และ Retention
+- 🏆 **[รายงานผลการทดสอบรับรองระบบระดับองค์กร (Enterprise Acceptance Test Report)](docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md)**: ผลการทดสอบรับรองความสมบูรณ์ 12/12 โมดูล (100% Passed) ตามมาตรฐาน AGENTS.md
+- 📗 **[กฎบัตรวิศวกรรมความปลอดภัย (AGENTS.md)](AGENTS.md)**: นโยบายการควบคุมความปลอดภัย Zero-Trust, Least Privilege และ Human Approval Gates
+
+
 ---
 
 ## 2. Logical Architecture / สถาปัตยกรรมเชิงตรรกะ
@@ -76,60 +84,88 @@ Enterprise-Data-Lakehouse-Platform/
 │
 ├── compose/                                 # Docker Compose & Portainer Stacks
 │   ├── docker-compose.dev.yml               # All-in-one DEV/UAT stack (Single-Host)
+│   ├── docker-compose.streaming.yml         # Redpanda & Console Streaming Stack (M02)
 │   ├── docker-compose.prod-node1.yml        # PROD Node 1 (Replica 1 + Keeper 1)
 │   ├── docker-compose.prod-node2.yml        # PROD Node 2 (Replica 2 + Keeper 2)
 │   ├── docker-compose.prod-keeper3.yml      # PROD Node 3 (Keeper 3 quorum tie-breaker)
 │   └── docker-compose.observability.yml     # Standalone Prometheus/Grafana/Loki stack
 │
 ├── clickhouse/                              # ClickHouse Server Configurations
-│   ├── config.d/
-│   │   ├── storage_configuration.xml        # Hot NVMe + Cold S3 storage tiering
-│   │   ├── keeper_config.xml                # ClickHouse Keeper 3-node Raft quorum
-│   │   ├── clusters.xml                     # Distributed cluster definition
-│   │   ├── prometheus.xml                   # Native Prometheus metric exporter (port 9363)
-│   │   ├── network.xml                      # Network listen hosts & security
-│   │   └── logging.xml                      # Structured JSON logs & query_log TTL
-│   └── users.d/
-│       ├── users.xml                        # User templates with password env injection
-│       └── roles_and_profiles.xml           # Least-privilege roles, quotas & profiles
+│   ├── config.d/                            # Storage tiering, keeper, clusters, prometheus, network
+│   └── users.d/                             # Least-privilege roles, users & profiles
 │
 ├── sql/init/                                # Database Initialization DDL
 │   ├── 01_databases.sql                     # raw, core, mart, serving databases
 │   ├── 02_medallion_tables.sql              # Bronze landing, Silver CDC, Gold fact_sales
 │   ├── 03_materialized_views.sql            # AggregatingMergeTree & serving views
-│   └── 04_rbac_and_row_policies.sql         # Roles, Grants & Row-Level Security
+│   ├── 04_rbac_and_row_policies.sql         # Roles, Grants & Row-Level Security
+│   └── 05_kafka_streaming.sql               # Kafka engine & streaming Materialized View
+│
+├── orchestration/                           # Pipeline Orchestration Module (M06)
+│   ├── pipeline_orchestrator.py             # Master DAG runner with retries, audit & webhooks
+│   └── airflow_dag.py                       # Production Airflow / Cloud Composer DAG
+│
+├── streaming/                               # Real-Time CDC & Streaming (M02)
+│   └── kafka_producer_sim.py                # Synthetic real-time event generator for POS/eCommerce
 │
 ├── dbt/                                     # dbt-clickhouse Transformation Project
 │   ├── dbt_project.yml
 │   ├── profiles.yml.example
-│   ├── models/
-│   │   ├── bronze/sources.yml               # Raw source contract definitions
-│   │   ├── silver/silver_orders_cleaned.sql # Cleaned & deduplicated CDC models
-│   │   └── gold/gold_sales_summary.sql      # Aggregated daily sales summary
-│   └── tests/
-│       └── test_sales_amount_positive.sql   # Data quality integrity tests
+│   ├── models/                              # Bronze, Silver, and Gold transformation models
+│   └── tests/                               # Data quality integrity tests
 │
-├── monitoring/                              # Observability & Alerting
-│   ├── prometheus/
-│   │   ├── prometheus.yml                   # Scrape configs for ClickHouse, Keeper, MinIO
-│   │   └── alert_rules.yml                  # Actionable alerts (latency, merges, keeper)
-│   ├── grafana/
-│   │   ├── provisioning/
-│   │   └── dashboards/clickhouse_overview.json # Curated operational dashboard
-│   └── loki/
-│       └── loki-config.yml
+├── data_quality/                            # Reconciliation & Scoring Engine (M05)
+│   ├── reconciliation.py                    # Row counts & checksum reconciler
+│   ├── anomaly_detector.py                  # Statistical Z-score & IQR anomaly detection (M05)
+│   └── test_rules.py                        # Rule assertions and quality scoring
 │
-├── runbooks/                                # Standard Operating Procedures
-│   ├── 01_portainer_git_stack_deployment.md # Deploying stacks via Portainer Git
-│   ├── 02_backup_and_restore_operations.md  # S3 Backup & Quarterly DR restore drill
-│   └── 03_troubleshooting_and_failover.md   # Parts explosion, replication lag & failover
+├── api/                                     # Governed Serving REST API Microservice (M07)
+│   ├── Dockerfile
+│   ├── main.py                              # FastAPI sub-second analytical endpoints
+│   └── routers/                             # Sales and metrics routers
 │
-├── scripts/                                 # Operational Automation Scripts
-│   ├── backup_clickhouse.sh                 # Native S3 backup script
-│   ├── restore_test.sh                      # Automated non-destructive restore drill
-│   └── validate_stack.sh                    # Compose & XML syntax validator
+├── semantics/                               # Semantic Metrics Definitions (M12)
+│   └── metrics.yml                          # Central enterprise KPI formulas
 │
-└── docs/                                    # Architectural Reports & Master Specifications
+├── contracts/                               # Data Contracts Specification (M08)
+│   └── orders_contract.yml                  # Open Data Contract Standard (ODCS) schema
+│
+├── governance/                              # Governance & Schema Guard (M08)
+│   ├── validate_contract.py                 # Pre-ingestion schema drift & contract validator
+│   └── policy_linter.py                     # AGENTS.md Policy-as-Code compliance linter
+│
+├── finops/                                  # FinOps & Resource Governance
+│   └── query_cost_analyzer.py               # ClickHouse query_log cost & memory analyzer
+│
+├── ai_assistant/                            # Governed AI Assistant & Vector Search (M12)
+│   ├── guardrails.py                        # Security filter (blocks DDL/DML, enforces LIMIT)
+│   ├── text_to_sql.py                       # NL-to-SQL query assistant
+│   ├── vector_search.py                     # Vector Cosine/L2 distance search demo
+│   └── incident_triage.py                   # Automated ClickHouse incident triage & RCA
+│
+├── monitoring/                              # Observability & Alerting (M09)
+│   ├── prometheus/alert_rules.yml           # Actionable alerts (latency, merges, keeper)
+│   ├── grafana/dashboards/                  # ClickHouse Lakehouse Overview dashboard
+│   └── loki/                                # Log aggregation
+│
+├── scripts/                                 # Developer CLI & Automation
+│   ├── manage.sh                            # Linux/macOS unified developer CLI
+│   ├── manage.ps1                           # Windows PowerShell unified developer CLI
+│   ├── master_e2e_test.py                   # Master E2E 12-module acceptance test suite
+│   ├── generate_catalog.py                  # Automated Data Catalog & Mermaid Lineage generator
+│   ├── stress_test.py                       # Multi-threaded analytical concurrency benchmark
+│   ├── smoke_test.py                        # Service health smoke test
+│   ├── benchmark_queries.py                 # Query latency benchmark
+│   ├── backup_clickhouse.sh                 # S3 backup script
+│   └── restore_test.sh                      # Non-destructive restore drill
+│
+└── docs/                                    # Master Specifications & Manuals
+    ├── DATA_CATALOG.md                      # พจนานุกรมข้อมูลและผังสายธารข้อมูล
+    ├── FINOPS_REPORT.md                     # รายงานการวิเคราะห์ต้นทุน FinOps
+    ├── ENTERPRISE_ACCEPTANCE_TEST_REPORT.md # ใบรับรองผลการทดสอบระบบระดับองค์กร (12/12 Passed)
+    ├── DEVELOPER_GUIDE.md                   # คู่มือการพัฒนาระบบ
+    ├── OPERATIONS_MANUAL.md                 # คู่มือการติดตั้งและการใช้งานจริง
+    └── ...
 ```
 
 ---
@@ -139,16 +175,39 @@ Enterprise-Data-Lakehouse-Platform/
 ### 4.1 DEV / UAT Single-Host (Evaluation & Benchmark)
 > **หมายเหตุสำคัญ**: การรันทุก Container บน Host เดียวกันจัดเป็นสภาพแวดล้อมเพื่อการพัฒนาและทดสอบ Benchmark เท่านั้น **ไม่ใช่ระบบ High Availability (HA)**
 
-เริ่มใช้งานอย่างรวดเร็ว:
+เริ่มใช้งานอย่างรวดเร็วด้วย **Developer CLI**:
+
 ```bash
-# 1. คัดลอกและตั้งค่า Environment Variables
-cp .env.example .env
+# บน Linux / macOS:
+./scripts/manage.sh start            # สตาร์ท DEV Stack
+./scripts/manage.sh run-pipeline     # รัน Pipeline อัตโนมัติ (Ingest -> dbt -> Test -> Reconcile -> Backup)
+./scripts/manage.sh contract-validate # ตรวจสอบข้อมูลเทียบกับ Data Contract
+./scripts/manage.sh finops-report    # วิเคราะห์ต้นทุน Query และ Resource Quota
+./scripts/manage.sh vector-demo      # ทดสอบ ClickHouse Vector Semantic Search
+./scripts/manage.sh anomaly-detect   # ตรวจจับความผิดปกติของคุณภาพข้อมูลทางสถิติ (Z-score + IQR)
+./scripts/manage.sh triage           # วินิจฉัยเหตุการณ์ผิดปกติและเชื่อมโยง Runbook อัตโนมัติ
+./scripts/manage.sh policy-lint      # ตรวจสอบความสอดคล้องตามกฎบัตร AGENTS.md 100%
+./scripts/manage.sh master-test      # รันการตรวจรับรองระบบครอบคลุมทั้ง 12 โมดูล
+./scripts/manage.sh streaming-start  # เปิดระบบ Real-time Streaming (Redpanda + Console @ 8088)
+./scripts/manage.sh stream-produce   # จำลองการยิงข้อมูลคำสั่งซื้อแบบ Real-time เข้า Kafka/ClickHouse
+./scripts/manage.sh generate-catalog # อัปเดต Data Catalog และ Interactive Mermaid Lineage
+./scripts/manage.sh stress-test 10   # ทดสอบโหลด 10 concurrent analytical users
+./scripts/manage.sh smoke-test       # ตรวจสอบสุขภาพของทุก Service
 
-# 2. เริ่มการทำงานของ Stack DEV
-docker compose -f compose/docker-compose.dev.yml up -d
-
-# 3. ตรวจสอบสถานะ
-docker compose -f compose/docker-compose.dev.yml ps
+# บน Windows PowerShell:
+.\scripts\manage.ps1 start
+.\scripts\manage.ps1 run-pipeline --dry-run
+.\scripts\manage.ps1 contract-validate --dry-run
+.\scripts\manage.ps1 finops-report --dry-run
+.\scripts\manage.ps1 vector-demo "backup and restore drill"
+.\scripts\manage.ps1 anomaly-detect --dry-run
+.\scripts\manage.ps1 triage --simulate TOO_MANY_PARTS
+.\scripts\manage.ps1 policy-lint
+.\scripts\manage.ps1 master-test
+.\scripts\manage.ps1 generate-catalog
+.\scripts\manage.ps1 stress-test 10 --dry-run
+.\scripts\manage.ps1 smoke-test
+.\scripts\manage.ps1 benchmark
 ```
 
 - **ClickHouse HTTP**: `http://localhost:8123/ping`
