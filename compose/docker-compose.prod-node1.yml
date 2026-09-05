@@ -110,6 +110,7 @@ services:
   # Portainer Edge / Standard Agent for Centralized Management
   # ----------------------------------------------------------------------------
   portainer-agent:
+    profiles: ["agent"]
     image: portainer/agent:2.21.0
     container_name: portainer-agent-node1
     ports:

@@ -110,6 +110,7 @@ services:
   # Portainer Agent
   # ----------------------------------------------------------------------------
   portainer-agent:
+    profiles: ["agent"]
     image: portainer/agent:2.21.0
     container_name: portainer-agent-node2
     ports:
