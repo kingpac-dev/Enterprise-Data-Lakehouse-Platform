@@ -38,16 +38,50 @@ registry ซึ่งเป็น dependency ของ deployment หยุด�
 ขั้นต่ำของ Harbor คือ 2 CPU, RAM 4 GB และ disk 40 GB; ขนาดแนะนำคือ 4 CPU, RAM 8 GB
 และ disk 160 GB
 
-## 2. สร้าง DNS และ Firewall
+## 2. สร้าง DNS บน Cloudflare และ Firewall
 
-ให้ DNS/Network team สร้าง record:
+Zone `kingpac-th.com` บริหารด้วย Cloudflare แต่ Cloudflare ทำหน้าที่ DNS/Proxy เท่านั้น
+ไม่ใช่เครื่องที่รัน Harbor ให้เลือกวิธีตามเส้นทาง network จริงก่อนสร้าง record:
+
+### 2.1 Harbor มี Public IP หรือ Public NAT
+
+ใน Cloudflare Dashboard ไปที่ **Websites > kingpac-th.com > DNS > Records > Add record**
+แล้วกำหนด:
+
+| Field | Value |
+|---|---|
+| Type | `A` |
+| Name | `harbor` |
+| IPv4 address | `<HARBOR_PUBLIC_IP_OR_NAT_IP>` |
+| Proxy status | **DNS only** (เมฆสีเทา) |
+| TTL | `Auto` หรือตามมาตรฐานองค์กร |
+
+ค่า `Name=harbor` จะได้ FQDN เป็น `harbor.kingpac-th.com` โดยใช้ **DNS only** เป็นค่าเริ่มต้น
+สำหรับ OCI/Docker Registry เนื่องจากการ push image เป็น request ขนาดใหญ่และอาจใช้เวลานาน
+Cloudflare Proxy มี request-size limit และ timeout ตาม plan จึงต้องทดสอบและอนุมัติแยกต่างหาก
+หากองค์กรต้องการเปิด Proxy (เมฆสีส้ม) หรือ Cloudflare Tunnel จริง ห้ามถือว่าสามารถใช้กับ
+registry ได้โดยอัตโนมัติ ต้องผ่านการทดสอบ push/pull image ขนาดจริงและทบทวนข้อจำกัดของ plan ก่อน
+
+> [!WARNING]
+> DNS-only จะเปิดเผย Public IP ของ Harbor origin จึงต้องจำกัด inbound `443/tcp` ที่ firewall
+> เฉพาะ CI runner, Portainer/Docker endpoints และ Admin VPN ที่ได้รับอนุมัติ ห้ามพึ่งการซ่อน IP เป็นมาตรการรักษาความปลอดภัย
+
+### 2.2 Harbor ใช้ Private IP เช่น `192.168.10.188`
+
+Public Cloudflare DNS ไม่ได้สร้าง route ไปยัง private subnet ให้ หาก Jenkins, Portainer และ Docker host
+เข้าถึงเครือข่ายนี้ผ่าน LAN/VPN ให้ใช้ **internal/split-horizon DNS** ขององค์กร:
 
 ```text
 Type: A
 Name: harbor.kingpac-th.com
-Value: <HARBOR_HOST_IP>
-TTL: ตามมาตรฐานองค์กร
+Value: <HARBOR_PRIVATE_IP>
+Scope: corporate LAN/VPN only
 ```
+
+อย่าใส่ `192.168.10.188` ลง Cloudflare public DNS แล้วคาดว่าจะเข้าถึงจาก Internet ได้
+เพราะ RFC1918 address ไม่สามารถ route ผ่าน Internet ได้ หากต้องการให้บริการจากภายนอก ให้ Network/Security
+อนุมัติ Public NAT/reverse proxy หรือ Cloudflare private-network design ก่อน โดยคงค่า IP จริงเป็น `TBD`
+จนกว่าจะได้รับอนุมัติ
 
 เปิด firewall อย่างน้อย:
 
@@ -61,9 +95,13 @@ TTL: ตามมาตรฐานองค์กร
 
 ```bash
 getent hosts harbor.kingpac-th.com
+curl -fsS https://harbor.kingpac-th.com/api/v2.0/ping
 openssl s_client -connect harbor.kingpac-th.com:443 \
   -servername harbor.kingpac-th.com </dev/null
 ```
+
+รันคำสั่งจากทั้ง Jenkins runner และ UAT Docker endpoint เพื่อยืนยันว่า DNS resolution และ routing
+มองเห็นเส้นทางเดียวกับที่ใช้ push/pull จริง
 
 ## 3. เตรียม Harbor Host
 
@@ -93,6 +131,11 @@ sudo install -d -m 0750 /etc/harbor/tls
 ```text
 DNS:harbor.kingpac-th.com
 ```
+
+เพราะแนวทางหลักใช้ DNS-only ซึ่ง client เชื่อมต่อ Harbor โดยตรง ให้ใช้ certificate จาก public CA
+หรือ Corporate CA ที่ติดตั้ง trust chain ไว้บน Jenkins, Portainer และ Docker hosts แล้ว
+**ห้ามใช้ Cloudflare Origin CA กับ DNS-only** เพราะ certificate ชนิดนี้ออกแบบให้ Cloudflare Proxy
+เป็นผู้เชื่อมต่อ origin และ Docker client ทั่วไปจะไม่เชื่อถือโดยอัตโนมัติ
 
 ติดตั้ง certificate และ private key โดยไม่ commit ลง Git:
 
@@ -248,17 +291,25 @@ Portainer Stack เก็บผลจริงไว้ใน change record ห�
   Business Owner/Security/Platform จะอนุมัติ
 - Harbor UAT Single Node หยุดทำงานทันทีเมื่อ host/disk/network ล้มเหลว
 
+## 12. เอกสารอ้างอิง
+
+- [Cloudflare: Manage DNS records](https://developers.cloudflare.com/dns/manage-dns-records/how-to/create-dns-records/)
+- [Cloudflare: Proxy status, request limits และ timeouts](https://developers.cloudflare.com/dns/proxy-status/)
+- [Cloudflare: Origin CA certificate limitations](https://developers.cloudflare.com/ssl/origin-configuration/origin-ca/)
+
 ## Handoff Contract
 
-- **Scope & Sources Inspected:** Harbor installer/configuration, TLS, project/robot accounts,
-  Portainer custom registry และ UAT image flow
-- **Assumptions & Decisions:** Ubuntu 24 LTS, Harbor UAT Single Node, HTTPS only,
-  private project `lakehouse` และ immutable release tags
+- **Scope & Sources Inspected:** Harbor installer/configuration, Cloudflare DNS/proxy behavior,
+  TLS, project/robot accounts, Portainer custom registry และ UAT image flow
+- **Assumptions & Decisions:** Ubuntu 24 LTS, Harbor UAT Single Node, HTTPS only, Cloudflare
+  DNS-only สำหรับ public origin หรือ internal split DNS สำหรับ private origin, private project
+  `lakehouse` และ immutable release tags
 - **Security & Operational Impact:** Secrets อยู่ใน secret manager; Portainer ใช้ pull-only
-  robot; Jenkins ใช้ push robot; ห้าม commit `harbor.yml` หรือ TLS private key
+  robot; Jenkins ใช้ push robot; DNS-only ต้องจำกัด origin ด้วย firewall; ห้าม commit
+  `harbor.yml` หรือ TLS private key
 - **Validation Commands & Results:** ต้องแนบ DNS, TLS, Harbor API, image push/pull, scan
   และ restore-drill outputs จาก UAT host ใน change record
-- **Remaining TBDs & Residual Risks:** Host IP, CA issuer, backup target, quotas, retention,
-  GC schedule และ business-approved RPO/RTO
+- **Remaining TBDs & Residual Risks:** Public/NAT หรือ private IP และ DNS route, CA issuer,
+  backup target, quotas, retention, GC schedule และ business-approved RPO/RTO
 - **Human Approval Required:** DNS/Network, Security/PKI, Platform/DevOps และ Change Owner
   ต้องอนุมัติก่อนเปิดใช้งาน

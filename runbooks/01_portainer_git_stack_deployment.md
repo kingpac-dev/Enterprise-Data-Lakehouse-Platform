@@ -114,8 +114,8 @@ sudo docker pull clickhouse/clickhouse-server:26.8
 sudo docker pull rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
 ```
 
-หากองค์กรบังคับใช้ Harbor/private registry ให้ mirror images ที่ผ่านการ scan แล้ว
-และกำหนด `MINIO_IMAGE`/`MINIO_MC_IMAGE` เป็น Harbor references แทน ห้ามปิด TLS
+หากองค์กรบังคับใช้ approved private registry ให้ mirror images ที่ผ่านการ scan แล้ว
+และกำหนด `MINIO_IMAGE`/`MINIO_MC_IMAGE` เป็น approved registry references แทน ห้ามปิด TLS
 verification เพื่อแก้ปัญหาการ pull image
 
 ใช้ approved release tag หรือ commit SHA ไม่ควร deploy จาก `main` โดยตรงหากยังไม่มี
@@ -125,9 +125,9 @@ CI และ human approval gate
 
 ไฟล์ Compose ที่ใช้ deploy ผ่าน Portainer ไม่มี `build:` เพื่อหลีกเลี่ยงการส่ง BuildKit/gRPC
 ผ่าน Portainer Agent ให้ build บน Docker endpoint host โดยตรง หรือ build ใน CI แล้ว push
-เข้า Harbor ก่อน deploy ห้ามเลือก `compose/docker-compose.uat-build.yml` เป็น Stack compose path
+เข้า GHCR ก่อน deploy ห้ามเลือก `compose/docker-compose.uat-build.yml` เป็น Stack compose path
 
-สำหรับ UAT host ที่ยังไม่มี Harbor ให้ checkout approved reference บน **เครื่อง Docker endpoint
+สำหรับ UAT host ที่ยังไม่ใช้ GHCR ให้ checkout approved reference บน **เครื่อง Docker endpoint
 เดียวกับที่ Portainer environment ชี้อยู่** แล้ว build local images:
 
 ```bash
@@ -158,7 +158,7 @@ sudo docker image inspect \
 
 Deployment Compose กำหนด `pull_policy: missing`: ถ้ามี local image อยู่แล้วจะใช้งานทันที
 แต่ถ้าไม่มีจะพยายาม pull จาก registry ดังนั้นต้อง build local images ให้ครบ หรือกำหนด
-`*_UAT_IMAGE` เป็น Harbor reference ที่ใช้ immutable tag/digest ก่อน deploy
+`*_UAT_IMAGE` เป็น GHCR reference ที่ใช้ immutable tag/digest ก่อน deploy
 
 ถ้าจะ deploy เฉพาะ Observability สามารถ build เฉพาะสาม images ได้:
 
@@ -168,10 +168,12 @@ sudo docker compose --env-file .env.example \
   prometheus-uat grafana-uat loki-uat
 ```
 
-แนวทางที่แนะนำสำหรับงานองค์กรคือให้ Jenkins build, Trivy scan และ push images ด้วย
-immutable release tag/digest เข้า Harbor จากนั้นเพิ่ม Harbor ใน **Portainer > Registries** และ
-กำหนดตัวแปร `*_UAT_IMAGE` เป็น Harbor reference ห้ามเก็บ registry password ใน Git
-ดูขั้นตอนติดตั้งและเชื่อมต่อที่
+แนวทางที่เลือกสำหรับ UAT นี้คือให้ GitHub Actions build และ push images ด้วย immutable
+release tag เข้า GHCR จากนั้นเพิ่ม `ghcr.io` ใน **Portainer > Registries** และกำหนดตัวแปร
+`*_UAT_IMAGE` เป็น GHCR reference ห้ามเก็บ GitHub PAT ใน Git ดูขั้นตอนที่
+[Runbook 06: ใช้ GitHub และ GHCR กับ Portainer UAT](06_github_ghcr_uat.md)
+
+หากองค์กรกลับมาใช้ Harbor ให้ดู
 [Runbook 05: Harbor Registry สำหรับ UAT และ Portainer](05_harbor_uat_registry.md)
 
 สำหรับ remote Docker environment ห้ามใส่ `build:` กลับเข้า Portainer deployment Compose
@@ -179,11 +181,12 @@ immutable release tag/digest เข้า Harbor จากนั้นเพิ�
 Git repository เป็น source ของ Compose/config และ CI เป็นผู้สร้าง images ตาม flow:
 
 ```text
-GitHub -> Jenkins/CI -> Trivy scan -> Harbor -> Portainer Git Stack -> UAT Docker endpoint
+GitHub tag -> GitHub Actions -> GHCR -> Portainer Git Stack -> UAT Docker endpoint
 ```
 
-ก่อนสร้าง Stack จาก Git ให้เพิ่ม Harbor ที่ **Portainer > Registries** และยืนยันว่า endpoint
-pull approved release images ได้ครบ หากไม่มี Harbor ให้ใช้ local-build workflow ด้านบนแทน
+ก่อนสร้าง Stack จาก Git ให้เพิ่ม GHCR ที่ **Portainer > Registries** ด้วย GitHub username และ
+read-only PAT แล้วทดสอบว่า endpoint pull approved release images ได้ครบ หาก GHCR ยังไม่มี
+images ให้ใช้ local-build workflow ด้านบนชั่วคราว ห้ามคาดว่า Git PAT จะ build image ให้อัตโนมัติ
 
 ### สร้าง shared external networks ก่อนทุก Stack
 
@@ -216,9 +219,16 @@ Server คนละเครื่องจะไม่ทำให้ network �
 ```text
 Name: lakehouse-uat-core
 Repository URL: https://github.com/kingpac-dev/Enterprise-Data-Lakehouse-Platform.git
+Authentication: enabled
+Username: <GITHUB_USERNAME_THAT_OWNS_PAT>
+Personal Access Token: <GITHUB_PAT_FROM_SECRET_MANAGER>
 Repository reference: refs/tags/<APPROVED_RELEASE_TAG>
 Compose path: compose/docker-compose.dev.yml
 ```
+
+ใช้ PAT เดียวกับ GHCR ได้เมื่อเป็น Personal Access Token (classic) ที่มี `read:packages`
+และมีสิทธิ์อ่าน repository; หาก repository เป็น private ต้องมี `repo` ด้วย ห้ามใส่ PAT
+ใน Environment variables ของ Stack หรือ commit ลง Git
 
 เพิ่ม Environment variables:
 
@@ -229,8 +239,8 @@ OBSERVABILITY_NETWORK=lakehouse-uat-observability
 CLICKHOUSE_PORT_HTTP=18123
 CLICKHOUSE_PORT_NATIVE=19000
 CLICKHOUSE_PORT_PROMETHEUS=19363
-CLICKHOUSE_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/clickhouse-uat:<RELEASE_TAG>
-DBT_RUNNER_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/dbt-runner-uat:<RELEASE_TAG>
+CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:<RELEASE_TAG>
+DBT_RUNNER_UAT_IMAGE=ghcr.io/kingpac-dev/dbt-runner-uat:<RELEASE_TAG>
 CLICKHOUSE_ADMIN_USER=admin
 CLICKHOUSE_ADMIN_PASSWORD=<STRONG_SECRET>
 CLICKHOUSE_ETL_PASSWORD=<STRONG_SECRET>
@@ -249,7 +259,7 @@ CLICKHOUSE_CPU_LIMIT=4
 CLICKHOUSE_MEMORY_LIMIT=8G
 CLICKHOUSE_MEMORY_RESERVATION=4G
 SERVING_API_PORT=18000
-SERVING_API_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/serving-api-uat:<RELEASE_TAG>
+SERVING_API_UAT_IMAGE=ghcr.io/kingpac-dev/serving-api-uat:<RELEASE_TAG>
 ```
 
 แทนค่าทุก `<STRONG_SECRET>` และ `<STRONG_ACCESS_KEY>` ด้วยค่าจริงก่อน Deploy
@@ -334,14 +344,14 @@ SOURCE_MSSQL_SA_PASSWORD=<STRONG_SA_SECRET>
 SOURCE_MSSQL_DB=source_uat
 SOURCE_MSSQL_USER=source_app
 SOURCE_MSSQL_PASSWORD=<STRONG_APP_SECRET>
-SOURCE_MSSQL_INIT_IMAGE=<HARBOR_HOST>/<PROJECT>/source-mssql-init:<RELEASE_TAG>
+SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:<RELEASE_TAG>
 SOURCE_MONGODB_PORT=17017
 SOURCE_MONGODB_DB=source_uat
 SOURCE_MONGODB_ROOT_USER=mongo_admin
 SOURCE_MONGODB_ROOT_PASSWORD=<STRONG_ROOT_SECRET>
 SOURCE_MONGODB_USER=source_app
 SOURCE_MONGODB_PASSWORD=<STRONG_APP_SECRET>
-SOURCE_MONGODB_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/source-mongodb:<RELEASE_TAG>
+SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:<RELEASE_TAG>
 ```
 
 กด **Deploy the stack** แล้วตรวจ PostgreSQL, MySQL, SQL Server และ MongoDB เป็น
@@ -406,9 +416,9 @@ Compose path: compose/docker-compose.observability.yml
 
 ```dotenv
 OBSERVABILITY_NETWORK=lakehouse-uat-observability
-PROMETHEUS_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/prometheus-uat:<RELEASE_TAG>
-GRAFANA_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/grafana-uat:<RELEASE_TAG>
-LOKI_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/loki-uat:<RELEASE_TAG>
+PROMETHEUS_UAT_IMAGE=ghcr.io/kingpac-dev/prometheus-uat:<RELEASE_TAG>
+GRAFANA_UAT_IMAGE=ghcr.io/kingpac-dev/grafana-uat:<RELEASE_TAG>
+LOKI_UAT_IMAGE=ghcr.io/kingpac-dev/loki-uat:<RELEASE_TAG>
 PROMETHEUS_PORT=19093
 GRAFANA_PORT=13000
 LOKI_PORT=13100
@@ -435,8 +445,8 @@ sudo docker image inspect \
   lakehouse/loki-uat:3.1.1 >/dev/null
 ```
 
-เมื่อคำสั่ง `image inspect` สำเร็จจึงกด Deploy อีกครั้ง หากใช้ Harbor ให้เปลี่ยนตัวแปร
-สามรายการเป็น Harbor image references และตั้ง Registry credential ใน Portainer แทน
+เมื่อคำสั่ง `image inspect` สำเร็จจึงกด Deploy อีกครั้ง หากใช้ GHCR ให้เปลี่ยนตัวแปร
+สามรายการเป็น GHCR image references และตั้ง GitHub credential ใน Portainer Registries
 
 Deploy แล้วตรวจ Prometheus, Grafana และ Loki เป็น `running` จากนั้นเปิด Prometheus
 **Status > Targets** และยืนยันว่า `clickhouse:9363` กับ `minio:9000` เป็น `UP`
@@ -463,7 +473,7 @@ note that the frame header looked like an HTTP/1.1 header
 แสดงว่า BuildKit/gRPC ถูกส่งผ่าน Portainer Agent/proxy แล้วได้รับ HTTP/1.1 response ให้ยืนยันว่า
 Stack compose path เป็น `compose/docker-compose.observability.yml` ซึ่งไม่มี `build:` จากนั้น
 build images บน endpoint host ตามหัวข้อ **Build custom UAT images ก่อนเข้า Portainer** หรือใช้
-images จาก Harbor ไม่แนะนำให้ตั้ง `DOCKER_BUILDKIT=0` เป็นวิธีถาวร เพราะเป็นเพียง workaround
+images จาก GHCR ไม่แนะนำให้ตั้ง `DOCKER_BUILDKIT=0` เป็นวิธีถาวร เพราะเป็นเพียง workaround
 ที่ปิด build backend รุ่นปัจจุบันและไม่แก้ agent/proxy configuration
 
 ## 10. ตรวจสอบหลัง Deploy
@@ -546,14 +556,16 @@ networks ขณะที่ยังมี stack ใดเชื่อมต่�
 ## Handoff Contract
 
 - **Scope & Sources Inspected:** UAT Core, Data Sources, Streaming, Observability,
-  environment template, monitoring configuration และ governance policy
+  environment template, GitHub/GHCR image flow, monitoring configuration และ governance policy
 - **Assumptions & Decisions:** Ubuntu 24 LTS, Docker Compose V2, Git-backed Stacks,
   UAT Single Node และ masked/synthetic data
-- **Security & Operational Impact:** Secrets อยู่ใน Portainer; external ports จำกัด
-  ด้วย firewall/VPN/TLS; application accounts ใช้ least privilege
+- **Security & Operational Impact:** Secrets และ GitHub PAT อยู่ใน Portainer/secret manager;
+  GHCR ใช้ pull-only permission; external ports จำกัดด้วย firewall/VPN/TLS;
+  application accounts ใช้ least privilege
 - **Validation Commands & Results:** ต้องแนบ output ของ Compose validation, container
   health, Prometheus targets และ smoke test จาก UAT host ใน change record
-- **Remaining TBDs & Residual Risks:** DNS/IP, firewall CIDRs, TLS certificates,
-  backup target, retention และ business-approved RPO/RTO
+- **Remaining TBDs & Residual Risks:** GitHub service account/PAT expiration, GHCR package
+  visibility/scan gate, DNS/IP, firewall CIDRs, TLS certificates, backup target, retention
+  และ business-approved RPO/RTO
 - **Human Approval Required:** Platform/DevOps, Security/Network, DBA และ Data Owner
   ต้องอนุมัติก่อน UAT sign-off หรือ production promotion
