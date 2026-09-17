@@ -27,11 +27,14 @@ jobs:
 
       - name: Validate Docker Compose V2 Syntax
         run: |
-          docker compose -f compose/docker-compose.dev.yml config > /dev/null
-          docker compose -f compose/docker-compose.prod-node1.yml config > /dev/null
-          docker compose -f compose/docker-compose.prod-node2.yml config > /dev/null
-          docker compose -f compose/docker-compose.prod-keeper3.yml config > /dev/null
-          docker compose -f compose/docker-compose.observability.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.dev.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.datasources.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.streaming.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.observability.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.uat-build.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.prod-node1.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.prod-node2.yml config > /dev/null
+          docker compose --env-file .env.example -f compose/docker-compose.prod-keeper3.yml config > /dev/null
           echo "All Docker Compose configurations are valid."
 
       - name: Validate ClickHouse XML Configuration Syntax

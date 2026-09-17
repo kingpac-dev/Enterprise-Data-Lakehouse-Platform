@@ -3,7 +3,8 @@ name: enterprise-lakehouse-uat-images
 # ==============================================================================
 # Build-only definition for UAT custom images.
 # Do not select this file as a Portainer Stack compose path.
-# Build on the UAT Docker host or in CI, then publish immutable tags to Harbor.
+# Build on the UAT Docker host or in CI, then publish immutable tags to an
+# approved OCI registry such as GHCR or Harbor.
 # ==============================================================================
 
 services:
