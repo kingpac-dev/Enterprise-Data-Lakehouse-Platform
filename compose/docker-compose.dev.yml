@@ -1,4 +1,4 @@
-name: enterprise-lakehouse-dev
+name: enterprise-lakehouse-uat-core
 
 # ==============================================================================
 # DEV / UAT Single-Host Stack (Evaluation & Benchmark Baseline)
@@ -7,10 +7,12 @@ name: enterprise-lakehouse-dev
 
 networks:
   data_backend:
+    name: ${INTEGRATION_NETWORK:-lakehouse-uat-integration}
     driver: bridge
   data_storage:
     driver: bridge
   observability:
+    name: ${OBSERVABILITY_NETWORK:-lakehouse-uat-observability}
     driver: bridge
   management:
     driver: bridge
@@ -19,9 +21,6 @@ volumes:
   clickhouse_dev_data:
   clickhouse_dev_logs:
   minio_dev_data:
-  portainer_dev_data:
-  prometheus_dev_data:
-  grafana_dev_data:
 
 services:
   # ----------------------------------------------------------------------------
@@ -30,17 +29,20 @@ services:
   minio:
     image: minio/minio:RELEASE.2024-08-17T01-24-54Z
     container_name: lakehouse-minio
-    command: server /data --console-address ":${MINIO_CONSOLE_PORT:-9001}"
+    # Keep the container listener fixed; only the host-side published port varies.
+    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-lakehouse_s3_access_key}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-lakehouse_s3_secret_change_me}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
     ports:
-      - "${S3_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${S3_PORT:-19090}:9000"
+      - "${MINIO_CONSOLE_PORT:-19091}:9001"
     volumes:
       - minio_dev_data:/data
     networks:
       - data_storage
+      - observability
       - management
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -77,13 +79,21 @@ services:
       minio:
         condition: service_healthy
     ports:
-      - "${CLICKHOUSE_PORT_HTTP:-8123}:8123"
-      - "${CLICKHOUSE_PORT_NATIVE:-9000}:9000"
-      - "${CLICKHOUSE_PORT_PROMETHEUS:-9363}:9363"
+      - "${CLICKHOUSE_PORT_HTTP:-18123}:8123"
+      - "${CLICKHOUSE_PORT_NATIVE:-19000}:9000"
+      - "${CLICKHOUSE_PORT_PROMETHEUS:-19363}:9363"
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_ADMIN_USER:-admin}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-change_this_admin_password_in_prod}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-1}
+      CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-change_this_admin_password_in_prod}
+      CLICKHOUSE_ETL_PASSWORD: ${CLICKHOUSE_ETL_PASSWORD:-change_this_etl_password_in_prod}
+      CLICKHOUSE_BI_PASSWORD: ${CLICKHOUSE_BI_PASSWORD:-change_this_bi_password_in_prod}
+      CLICKHOUSE_API_PASSWORD: ${CLICKHOUSE_API_PASSWORD:-change_this_api_password_in_prod}
+      CLICKHOUSE_MONITORING_PASSWORD: ${CLICKHOUSE_MONITORING_PASSWORD:-change_this_monitoring_password_in_prod}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lakehouse_s3_access_key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-lakehouse_s3_secret_change_me}
+      S3_REGION: ${S3_REGION:-us-east-1}
     volumes:
       - clickhouse_dev_data:/var/lib/clickhouse
       - clickhouse_dev_logs:/var/log/clickhouse-server
@@ -114,68 +124,7 @@ services:
     restart: unless-stopped
 
   # ----------------------------------------------------------------------------
-  # 3. Operations & Stack Management (Portainer)
-  # ----------------------------------------------------------------------------
-  portainer:
-    image: portainer/portainer-ce:2.21.0
-    container_name: lakehouse-portainer-dev
-    command: -H unix:///var/run/docker.sock
-    ports:
-      - "${PORTAINER_PORT_HTTP:-9002}:9000"
-      - "${PORTAINER_PORT_HTTPS:-9443}:9443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_dev_data:/data
-    networks:
-      - management
-    restart: unless-stopped
-
-  # ----------------------------------------------------------------------------
-  # 4. Observability: Prometheus
-  # ----------------------------------------------------------------------------
-  prometheus:
-    image: prom/prometheus:v2.54.0
-    container_name: lakehouse-prometheus-dev
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
-      - "--web.console.templates=/usr/share/prometheus/consoles"
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    volumes:
-      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
-      - prometheus_dev_data:/prometheus
-    networks:
-      - observability
-    restart: unless-stopped
-
-  # ----------------------------------------------------------------------------
-  # 5. Observability: Grafana
-  # ----------------------------------------------------------------------------
-  grafana:
-    image: grafana/grafana:11.1.4
-    container_name: lakehouse-grafana-dev
-    depends_on:
-      - prometheus
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change_this_grafana_password_in_prod}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_dev_data:/var/lib/grafana
-    networks:
-      - observability
-      - management
-    restart: unless-stopped
-
-  # ----------------------------------------------------------------------------
-  # 6. Data Transformation: dbt-runner (On-Demand Profile)
+  # 3. Data Transformation: dbt-runner (On-Demand Profile)
   # ----------------------------------------------------------------------------
   dbt-runner:
     profiles: ["tools"]
@@ -196,7 +145,7 @@ services:
       - data_backend
 
   # ----------------------------------------------------------------------------
-  # 7. Serving REST API Microservice (On-Demand Profile)
+  # 4. Serving REST API Microservice (On-Demand Profile)
   # ----------------------------------------------------------------------------
   serving-api:
     profiles: ["api"]
@@ -207,7 +156,7 @@ services:
     depends_on:
       - clickhouse
     ports:
-      - "8000:8000"
+      - "${SERVING_API_PORT:-18000}:8000"
     environment:
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_PORT_HTTP: 8123
@@ -217,5 +166,3 @@ services:
       - data_backend
       - management
     restart: unless-stopped
-
-

@@ -83,7 +83,8 @@ Enterprise-Data-Lakehouse-Platform/
 │   └── 0005-dbt-clickhouse-transformation.md
 │
 ├── compose/                                 # Docker Compose & Portainer Stacks
-│   ├── docker-compose.dev.yml               # All-in-one DEV/UAT stack (Single-Host)
+│   ├── docker-compose.dev.yml               # UAT Core: ClickHouse, MinIO, dbt, API
+│   ├── docker-compose.datasources.yml       # UAT PostgreSQL/MySQL/SQL Server/MongoDB
 │   ├── docker-compose.streaming.yml         # Redpanda & Console Streaming Stack (M02)
 │   ├── docker-compose.prod-node1.yml        # PROD Node 1 (Replica 1 + Keeper 1)
 │   ├── docker-compose.prod-node2.yml        # PROD Node 2 (Replica 2 + Keeper 2)
@@ -175,6 +176,16 @@ Enterprise-Data-Lakehouse-Platform/
 ### 4.1 DEV / UAT Single-Host (Evaluation & Benchmark)
 > **หมายเหตุสำคัญ**: การรันทุก Container บน Host เดียวกันจัดเป็นสภาพแวดล้อมเพื่อการพัฒนาและทดสอบ Benchmark เท่านั้น **ไม่ใช่ระบบ High Availability (HA)**
 
+UAT is deployed as four independently managed Portainer Git-backed stacks:
+
+1. Core — ClickHouse, MinIO, dbt runner, and Serving API.
+2. Data Sources — PostgreSQL, MySQL, SQL Server, and MongoDB.
+3. Streaming — Redpanda and Redpanda Console.
+4. Observability — Prometheus, Grafana, and Loki.
+
+Deploy Core first because it owns the two shared Docker networks used by the
+other stacks. See [the Portainer deployment runbook](runbooks/01_portainer_git_stack_deployment.md).
+
 เริ่มใช้งานอย่างรวดเร็วด้วย **Developer CLI**:
 
 ```bash
@@ -210,10 +221,10 @@ Enterprise-Data-Lakehouse-Platform/
 .\scripts\manage.ps1 benchmark
 ```
 
-- **ClickHouse HTTP**: `http://localhost:8123/ping`
-- **MinIO Console**: `http://localhost:9001` (User/Password ใน `.env`)
-- **Portainer UI**: `https://localhost:9443`
-- **Grafana Dashboard**: `http://localhost:3000` (User: `admin`)
+- **ClickHouse HTTP**: `http://localhost:18123/ping`
+- **MinIO S3 API / Console**: `http://localhost:19090` / `http://localhost:19091`
+- **Portainer UI**: `https://localhost:19443`
+- **Grafana Dashboard**: `http://localhost:13000` (User: `admin`)
 
 ---
 

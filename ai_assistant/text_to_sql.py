@@ -14,7 +14,7 @@ import urllib.error
 from .guardrails import validate_sql_guardrails
 
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
-CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT_HTTP", "8123"))
+CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT_HTTP", "18123"))
 CLICKHOUSE_USER = os.getenv("CLICKHOUSE_BI_USER", "bi_user")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_BI_PASSWORD", "change_this_bi_password_in_prod")
 

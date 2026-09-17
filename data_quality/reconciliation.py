@@ -17,7 +17,7 @@ from typing import Dict, Any
 class DataReconciliationEngine:
     def __init__(self):
         self.host = os.getenv("CLICKHOUSE_HOST", "localhost")
-        self.port = int(os.getenv("CLICKHOUSE_PORT_HTTP", "8123"))
+        self.port = int(os.getenv("CLICKHOUSE_PORT_HTTP", "18123"))
         self.user = os.getenv("CLICKHOUSE_ADMIN_USER", "admin")
         self.password = os.getenv("CLICKHOUSE_ADMIN_PASSWORD", "change_this_admin_password_in_prod")
 
