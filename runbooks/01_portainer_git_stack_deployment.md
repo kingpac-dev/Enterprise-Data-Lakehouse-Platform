@@ -320,8 +320,25 @@ GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=<STRONG_SECRET>
 ```
 
+Compose ชุด UAT จะ build image ของ Prometheus, Grafana และ Loki จากไฟล์ config ใน Git
+โดยใช้ `pull_policy: build` จึงไม่ต้องเพิ่มไฟล์ใน **Additional paths** และไม่ใช้ relative
+bind mount สำหรับ config เมื่อ deploy ผ่าน Portainer Git Stack
+
 Deploy แล้วตรวจ Prometheus, Grafana และ Loki เป็น `running` จากนั้นเปิด Prometheus
 **Status > Targets** และยืนยันว่า `clickhouse:9363` กับ `minio:9000` เป็น `UP`
+
+หากเคยพบ error ลักษณะนี้:
+
+```text
+error mounting "/data/compose/.../monitoring/loki/loki-config.yml"
+to "/etc/loki/local-config.yaml": not a directory
+```
+
+สาเหตุคือ repository อยู่ใน filesystem ของ Portainer container แต่ Docker daemon พยายาม
+resolve relative bind mount บน host ทำให้ source file กลายเป็น directory หรือหาไม่พบ ให้ใช้
+release ที่มี `Dockerfile.uat` และ `pull_policy: build` แล้วกด **Update the stack** โดยเปิด
+**Re-pull image and redeploy** หาก UI แสดงตัวเลือกนี้ ไม่ต้องสร้าง path ใต้ `/data/compose`
+ด้วยตนเอง และไม่ต้องลบ named volumes เพื่อแก้ error นี้
 
 ## 10. ตรวจสอบหลัง Deploy
 

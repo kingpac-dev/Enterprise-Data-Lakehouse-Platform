@@ -1,0 +1,3 @@
+FROM mongo:8.0.4-noble
+
+COPY --chmod=0444 init/init-mongodb-source.js /docker-entrypoint-initdb.d/10-create-app-user.js

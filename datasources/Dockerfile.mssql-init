@@ -1,0 +1,7 @@
+FROM mcr.microsoft.com/mssql/server:2022-CU16-ubuntu-22.04
+
+USER root
+COPY --chmod=0555 init/init-mssql-source.sh /opt/lakehouse/init-mssql-source.sh
+USER mssql
+
+ENTRYPOINT ["/bin/bash", "/opt/lakehouse/init-mssql-source.sh"]

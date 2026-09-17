@@ -22,7 +22,11 @@ services:
   # Prometheus Metrics Engine
   # ----------------------------------------------------------------------------
   prometheus:
-    image: prom/prometheus:v2.54.0
+    image: lakehouse/prometheus-uat:2.54.0
+    pull_policy: build
+    build:
+      context: ../monitoring/prometheus
+      dockerfile: Dockerfile.uat
     container_name: lakehouse-prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -32,8 +36,6 @@ services:
     ports:
       - "${PROMETHEUS_PORT:-19093}:9090"
     volumes:
-      - ../monitoring/prometheus/prometheus.uat.yml:/etc/prometheus/prometheus.yml:ro
-      - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_prod_data:/prometheus
     networks:
       - observability
@@ -43,7 +45,11 @@ services:
   # Grafana Visualization & Dashboards
   # ----------------------------------------------------------------------------
   grafana:
-    image: grafana/grafana:11.1.4
+    image: lakehouse/grafana-uat:11.1.4
+    pull_policy: build
+    build:
+      context: ../monitoring/grafana
+      dockerfile: Dockerfile.uat
     container_name: lakehouse-grafana
     depends_on:
       - prometheus
@@ -55,8 +61,6 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_INSTALL_PLUGINS: "grafana-clickhouse-datasource"
     volumes:
-      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_prod_data:/var/lib/grafana
     networks:
       - observability
@@ -67,13 +71,16 @@ services:
   # Loki Structured Log Aggregation
   # ----------------------------------------------------------------------------
   loki:
-    image: grafana/loki:3.1.1
+    image: lakehouse/loki-uat:3.1.1
+    pull_policy: build
+    build:
+      context: ../monitoring/loki
+      dockerfile: Dockerfile.uat
     container_name: lakehouse-loki
     command: -config.file=/etc/loki/local-config.yaml
     ports:
       - "${LOKI_PORT:-13100}:3100"
     volumes:
-      - ../monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_prod_data:/loki
     networks:
       - observability

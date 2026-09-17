@@ -84,13 +84,16 @@ Network/Security owner จะอนุมัติ
 2. Production S3 endpoint, bucket, KMS และ backup credentials ยังไม่ได้กำหนด
 3. Production observability topology/configuration ยังไม่มี; ไฟล์ observability ปัจจุบัน
    ใช้ shared Docker network สำหรับ UAT Single Node
-4. ต้อง validate การ mount `keeper_config.xml` แยกระหว่าง Keeper process และ
+4. Compose ของ Production ยังมี relative bind mounts สำหรับ ClickHouse/Keeper ซึ่งไม่ควร
+   deploy ผ่าน Portainer Git Stack จนกว่าจะเปลี่ยนเป็น immutable image หรือ absolute host path
+   ที่ provision และตรวจสอบบนแต่ละ node แล้ว
+5. ต้อง validate การ mount `keeper_config.xml` แยกระหว่าง Keeper process และ
    ClickHouse server เพื่อป้องกัน embedded Keeper/server-id conflict
-5. Service-account และ S3 environment variables ต้องส่งเข้า ClickHouse containers
+6. Service-account และ S3 environment variables ต้องส่งเข้า ClickHouse containers
    ให้ครบและทดสอบจริง
-6. TLS สำหรับ ClickHouse HTTP/native, interserver และ Keeper ยังต้องออกแบบ/อนุมัติ
-7. Load balancer/VIP และ health-check policy ยังเป็น `TBD`
-8. Production Data Sources และ Streaming topology ยังไม่มี approved Compose/IaC
+7. TLS สำหรับ ClickHouse HTTP/native, interserver และ Keeper ยังต้องออกแบบ/อนุมัติ
+8. Load balancer/VIP และ health-check policy ยังเป็น `TBD`
+9. Production Data Sources และ Streaming topology ยังไม่มี approved Compose/IaC
 
 จนกว่ารายการเหล่านี้จะปิดครบ ให้ถือว่าสถานะเป็น **NOT READY FOR PRODUCTION**
 
