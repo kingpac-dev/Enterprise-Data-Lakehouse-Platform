@@ -21,13 +21,14 @@ volumes:
   clickhouse_dev_data:
   clickhouse_dev_logs:
   minio_dev_data:
+  rustfs_dev_data:
 
 services:
   # ----------------------------------------------------------------------------
   # 1. S3-Compatible Lake Storage (MinIO)
   # ----------------------------------------------------------------------------
   minio:
-    image: minio/minio:RELEASE.2024-08-17T01-24-54Z
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1}
     container_name: lakehouse-minio
     # Keep the container listener fixed; only the host-side published port varies.
     command: server /data --console-address ":9001"
@@ -53,7 +54,7 @@ services:
 
   # Bucket Initializer for Lakehouse Medallion Paths
   minio-init:
-    image: minio/mc:RELEASE.2024-08-13T06-03-34Z
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:RELEASE.2024-08-13T05-33-17Z@sha256:07c08763869bb18306d6f33a7e887c42211b1585a63c9098c9cf28b1b45b19aa}
     container_name: lakehouse-minio-init
     depends_on:
       minio:
@@ -68,6 +69,78 @@ services:
       "
     networks:
       - data_storage
+
+  # ----------------------------------------------------------------------------
+  # Optional S3-Compatible Storage: RustFS (enable profile: rustfs)
+  # ----------------------------------------------------------------------------
+  rustfs-permissions:
+    profiles: ["rustfs"]
+    image: alpine:3.20.3
+    container_name: lakehouse-rustfs-permissions
+    user: root
+    command: ["sh", "-c", "chown -R 10001:10001 /data"]
+    volumes:
+      - rustfs_dev_data:/data
+    restart: "no"
+
+  rustfs:
+    profiles: ["rustfs"]
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff}
+    container_name: lakehouse-rustfs
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_HEALTH_ENDPOINT_ENABLE: "true"
+      RUSTFS_REGION: ${RUSTFS_REGION:-us-east-1}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-change_this_rustfs_access_key}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-change_this_rustfs_secret_key}
+      RUSTFS_OBS_LOGGER_LEVEL: ${RUSTFS_LOG_LEVEL:-info}
+    ports:
+      - "${RUSTFS_PORT:-19094}:9000"
+      - "${RUSTFS_CONSOLE_PORT:-19095}:9001"
+    volumes:
+      - rustfs_dev_data:/data
+    networks:
+      - data_backend
+      - observability
+      - management
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health/ready && curl -fsS http://127.0.0.1:9001/rustfs/console/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "${RUSTFS_CPU_LIMIT:-2}"
+          memory: "${RUSTFS_MEMORY_LIMIT:-2G}"
+    restart: unless-stopped
+
+  rustfs-init:
+    profiles: ["rustfs"]
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:RELEASE.2024-08-13T05-33-17Z@sha256:07c08763869bb18306d6f33a7e887c42211b1585a63c9098c9cf28b1b45b19aa}
+    container_name: lakehouse-rustfs-init
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set rustfs http://rustfs:9000 ${RUSTFS_ACCESS_KEY:-change_this_rustfs_access_key} ${RUSTFS_SECRET_KEY:-change_this_rustfs_secret_key};
+      mc mb --ignore-existing rustfs/${RUSTFS_BUCKET_LAKE:-enterprise-data-lake-rustfs};
+      mc anonymous set none rustfs/${RUSTFS_BUCKET_LAKE:-enterprise-data-lake-rustfs};
+      echo 'RustFS bucket initialized successfully.';
+      exit 0;
+      "
+    networks:
+      - data_backend
 
   # ----------------------------------------------------------------------------
   # 2. ClickHouse Analytics & Serving Engine (26.8 LTS)
@@ -94,6 +167,9 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-lakehouse_s3_access_key}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-lakehouse_s3_secret_change_me}
       S3_REGION: ${S3_REGION:-us-east-1}
+      CLICKHOUSE_S3_ENDPOINT: ${CLICKHOUSE_S3_ENDPOINT:-http://minio:9000/enterprise-data-lake/clickhouse_data/}
+      CLICKHOUSE_S3_ACCESS_KEY: ${CLICKHOUSE_S3_ACCESS_KEY:-${S3_ACCESS_KEY:-lakehouse_s3_access_key}}
+      CLICKHOUSE_S3_SECRET_KEY: ${CLICKHOUSE_S3_SECRET_KEY:-${S3_SECRET_KEY:-lakehouse_s3_secret_change_me}}
     volumes:
       - clickhouse_dev_data:/var/lib/clickhouse
       - clickhouse_dev_logs:/var/log/clickhouse-server
