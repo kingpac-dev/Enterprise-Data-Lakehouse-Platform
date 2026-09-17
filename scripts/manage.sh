@@ -13,10 +13,12 @@ usage() {
   echo "Usage: $0 <command> [args]"
   echo ""
   echo "Commands:"
-  echo "  start         Start the DEV/UAT stack (ClickHouse, MinIO, Portainer, Prometheus, Grafana)"
+  echo "  start         Start UAT Core, then the separate Observability stack"
   echo "  stop          Stop the DEV/UAT stack"
   echo "  restart       Restart the DEV/UAT stack"
   echo "  status        Check container status"
+  echo "  datasources-start Start PostgreSQL, MySQL, SQL Server, and MongoDB"
+  echo "  datasources-stop  Stop the UAT Data Sources stack"
   echo "  ingest        Generate and ingest synthetic orders into ClickHouse and S3"
   echo "  dbt-run       Execute dbt transformations (Bronze -> Silver -> Gold)"
   echo "  dbt-test      Run dbt data quality tests"
@@ -59,11 +61,13 @@ case "${COMMAND}" in
       cp .env.example .env
     fi
     docker compose -f compose/docker-compose.dev.yml up -d
+    docker compose -f compose/docker-compose.observability.yml up -d
     echo "Stack started successfully."
-    echo "ClickHouse: http://localhost:8123 | Grafana: http://localhost:3000 | MinIO: http://localhost:9001"
+    echo "ClickHouse: http://localhost:${CLICKHOUSE_PORT_HTTP:-18123} | Grafana: http://localhost:${GRAFANA_PORT:-13000} | MinIO: http://localhost:${MINIO_CONSOLE_PORT:-19091}"
     ;;
   stop)
     echo "Stopping DEV/UAT stack..."
+    docker compose -f compose/docker-compose.observability.yml down
     docker compose -f compose/docker-compose.dev.yml down
     ;;
   restart)
@@ -72,6 +76,15 @@ case "${COMMAND}" in
     ;;
   status)
     docker compose -f compose/docker-compose.dev.yml ps
+    docker compose -f compose/docker-compose.observability.yml ps
+    ;;
+  datasources-start)
+    echo "Starting UAT Data Sources stack..."
+    docker compose -f compose/docker-compose.datasources.yml up -d
+    ;;
+  datasources-stop)
+    echo "Stopping UAT Data Sources stack..."
+    docker compose -f compose/docker-compose.datasources.yml down
     ;;
   ingest)
     echo "Running synthetic data ingestion..."
@@ -98,7 +111,7 @@ case "${COMMAND}" in
   api-start)
     echo "Starting Serving REST API microservice..."
     docker compose -f compose/docker-compose.dev.yml --profile api up -d serving-api
-    echo "API running at: http://localhost:8000/docs"
+    echo "API running at: http://localhost:${SERVING_API_PORT:-18000}/docs"
     ;;
   ai-query)
     QUERY="${1:-แสดงยอดขายรายวัน 14 วันล่าสุด}"
@@ -112,7 +125,7 @@ case "${COMMAND}" in
     echo "Starting Redpanda & Console Streaming Stack..."
     docker compose -f compose/docker-compose.streaming.yml up -d
     echo "Streaming Stack active!"
-    echo "Kafka Broker: localhost:9092 | Redpanda Console: http://localhost:8088"
+    echo "Kafka Broker: localhost:${REDPANDA_PORT_KAFKA:-19092} | Redpanda Console: http://localhost:${REDPANDA_CONSOLE_PORT:-18088}"
     ;;
   streaming-stop)
     echo "Stopping Streaming Stack..."
@@ -176,4 +189,3 @@ case "${COMMAND}" in
     usage
     ;;
 esac
-

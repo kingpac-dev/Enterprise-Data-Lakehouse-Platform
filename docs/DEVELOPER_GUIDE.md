@@ -74,11 +74,11 @@ cp .env.example .env
 ### 2.3 การเข้าถึงเซอร์วิสต่างๆ (Default Endpoints)
 | เซอร์วิส | URL | รหัสผ่านเริ่มต้น | หน้าที่ |
 |---|---|---|---|
-| **ClickHouse HTTP** | `http://localhost:8123` | ดูใน `.env` (`admin`) | ส่งคำสั่ง SQL ผ่าน Web/REST |
-| **ClickHouse Native** | `localhost:9000` | ดูใน `.env` (`admin`) | เชื่อมต่อผ่าน DBeaver, dbt, CLI |
-| **MinIO Console** | `http://localhost:9001` | ดูใน `.env` | ตรวจสอบไฟล์ Parquet ใน Lake |
-| **Grafana** | `http://localhost:3000` | ดูใน `.env` (`admin`) | แดชบอร์ดตรวจสอบสุขภาพระบบ |
-| **Prometheus** | `http://localhost:9090` | ไม่ต้องใช้ | เมทริกซ์และสถานะ Alert Rules |
+| **ClickHouse HTTP** | `http://localhost:18123` | ดูใน `.env` (`admin`) | ส่งคำสั่ง SQL ผ่าน Web/REST |
+| **ClickHouse Native** | `localhost:19000` | ดูใน `.env` (`admin`) | เชื่อมต่อผ่าน DBeaver, dbt, CLI |
+| **MinIO Console** | `http://localhost:19091` | ดูใน `.env` | ตรวจสอบไฟล์ Parquet ใน Lake |
+| **Grafana** | `http://localhost:13000` | ดูใน `.env` (`admin`) | แดชบอร์ดตรวจสอบสุขภาพระบบ |
+| **Prometheus** | `http://localhost:19093` | ไม่ต้องใช้ | เมทริกซ์และสถานะ Alert Rules |
 | **Portainer** | `https://localhost:9443` | กำหนดเมื่อเปิดครั้งแรก | จัดการ Containers ผ่าน Web UI |
 
 ---
@@ -337,7 +337,7 @@ WHERE _is_deleted = 0
 ./scripts/manage.sh streaming-start
 
 # เข้าใช้งาน Web Console เพื่อดู Topic และ Message Stream แบบ Real-time:
-# URL: http://localhost:8088
+# URL: http://localhost:18088
 
 # ทดสอบรัน Event Producer จำลองการส่งข้อมูลคำสั่งซื้อแบบ Real-time:
 ./scripts/manage.sh stream-produce
@@ -535,5 +535,4 @@ ClickHouse 26.8 LTS รองรับการคำนวณเวกเตอ
 - [ ] ผ่านการตรวจสอบความสอดคล้องนโยบายองค์กร 100% (`policy-lint`)
 - [ ] ผ่านการทดสอบ Master Acceptance Suite 12/12 โมดูล (`master-test`)
 - [ ] อัปเดตเอกสารประกอบ, Data Catalog และ ADR หากมีการเปลี่ยนแปลงสถาปัตยกรรม
-
 

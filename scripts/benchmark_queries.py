@@ -13,7 +13,7 @@ import urllib.request
 import urllib.error
 
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
-CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT_HTTP", "8123"))
+CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT_HTTP", "18123"))
 CLICKHOUSE_USER = os.getenv("CLICKHOUSE_ADMIN_USER", "admin")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_ADMIN_PASSWORD", "change_this_admin_password_in_prod")
 

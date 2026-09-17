@@ -20,10 +20,12 @@ function Show-Help {
     Write-Host "Usage: .\scripts\manage.ps1 <command> [args]" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Commands:"
-    Write-Host "  start         Start the DEV/UAT stack (ClickHouse, MinIO, Portainer, Prometheus, Grafana)"
+    Write-Host "  start         Start UAT Core, then the separate Observability stack"
     Write-Host "  stop          Stop the DEV/UAT stack"
     Write-Host "  restart       Restart the DEV/UAT stack"
     Write-Host "  status        Check container status"
+    Write-Host "  datasources-start Start PostgreSQL, MySQL, SQL Server, and MongoDB"
+    Write-Host "  datasources-stop  Stop the UAT Data Sources stack"
     Write-Host "  ingest        Generate and ingest synthetic orders into ClickHouse and S3"
     Write-Host "  dbt-run       Execute dbt transformations (Bronze -> Silver -> Gold)"
     Write-Host "  dbt-test      Run dbt data quality tests"
@@ -58,11 +60,13 @@ switch ($Command.ToLower()) {
             Copy-Item ".env.example" ".env"
         }
         docker compose -f compose/docker-compose.dev.yml up -d
+        docker compose -f compose/docker-compose.observability.yml up -d
         Write-Host "Stack started successfully!" -ForegroundColor Green
-        Write-Host "ClickHouse: http://localhost:8123 | Grafana: http://localhost:3000 | MinIO: http://localhost:9001"
+        Write-Host "ClickHouse: http://localhost:18123 | Grafana: http://localhost:13000 | MinIO: http://localhost:19091"
     }
     "stop" {
         Write-Host "Stopping DEV/UAT stack..." -ForegroundColor Yellow
+        docker compose -f compose/docker-compose.observability.yml down
         docker compose -f compose/docker-compose.dev.yml down
     }
     "restart" {
@@ -71,6 +75,15 @@ switch ($Command.ToLower()) {
     }
     "status" {
         docker compose -f compose/docker-compose.dev.yml ps
+        docker compose -f compose/docker-compose.observability.yml ps
+    }
+    "datasources-start" {
+        Write-Host "Starting UAT Data Sources stack..." -ForegroundColor Cyan
+        docker compose -f compose/docker-compose.datasources.yml up -d
+    }
+    "datasources-stop" {
+        Write-Host "Stopping UAT Data Sources stack..." -ForegroundColor Yellow
+        docker compose -f compose/docker-compose.datasources.yml down
     }
     "ingest" {
         Write-Host "Running synthetic data ingestion..." -ForegroundColor Cyan
@@ -97,7 +110,7 @@ switch ($Command.ToLower()) {
     "api-start" {
         Write-Host "Starting Serving REST API microservice..." -ForegroundColor Cyan
         docker compose -f compose/docker-compose.dev.yml --profile api up -d serving-api
-        Write-Host "API running at: http://localhost:8000/docs" -ForegroundColor Green
+        Write-Host "API running at: http://localhost:18000/docs" -ForegroundColor Green
     }
     "ai-query" {
         $q = "daily sales trend"
@@ -118,7 +131,7 @@ switch ($Command.ToLower()) {
         Write-Host "Starting Redpanda & Console Streaming Stack..." -ForegroundColor Cyan
         docker compose -f compose/docker-compose.streaming.yml up -d
         Write-Host "Streaming Stack active!" -ForegroundColor Green
-        Write-Host "Kafka Broker: localhost:9092 | Redpanda Console: http://localhost:8088"
+        Write-Host "Kafka Broker: localhost:19092 | Redpanda Console: http://localhost:18088"
     }
     "streaming-stop" {
         Write-Host "Stopping Streaming Stack..." -ForegroundColor Yellow
@@ -212,6 +225,7 @@ switch ($Command.ToLower()) {
         docker compose -f compose/docker-compose.prod-keeper3.yml config > $null
         docker compose -f compose/docker-compose.observability.yml config > $null
         docker compose -f compose/docker-compose.streaming.yml config > $null
+        docker compose -f compose/docker-compose.datasources.yml config > $null
         Write-Host "All Compose files valid!" -ForegroundColor Green
 
         Write-Host "Validating XML configurations..." -ForegroundColor Cyan

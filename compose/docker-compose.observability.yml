@@ -7,7 +7,8 @@ name: enterprise-lakehouse-observability
 
 networks:
   observability:
-    driver: bridge
+    external: true
+    name: ${OBSERVABILITY_NETWORK:-lakehouse-uat-observability}
   management:
     driver: bridge
 
@@ -29,9 +30,9 @@ services:
       - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+      - "${PROMETHEUS_PORT:-19093}:9090"
     volumes:
-      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/prometheus.uat.yml:/etc/prometheus/prometheus.yml:ro
       - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_prod_data:/prometheus
     networks:
@@ -47,7 +48,7 @@ services:
     depends_on:
       - prometheus
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      - "${GRAFANA_PORT:-13000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
@@ -70,7 +71,7 @@ services:
     container_name: lakehouse-loki
     command: -config.file=/etc/loki/local-config.yaml
     ports:
-      - "${LOKI_PORT:-3100}:3100"
+      - "${LOKI_PORT:-13100}:3100"
     volumes:
       - ../monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_prod_data:/loki

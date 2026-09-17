@@ -34,7 +34,7 @@ class BaseConnector(abc.ABC):
         self.state_file = os.path.join(self.state_dir, f"{self.source_system}_{self.source_table}.json")
 
         self.clickhouse_host = os.getenv("CLICKHOUSE_HOST", "localhost")
-        self.clickhouse_port = int(os.getenv("CLICKHOUSE_PORT_HTTP", "8123"))
+        self.clickhouse_port = int(os.getenv("CLICKHOUSE_PORT_HTTP", "18123"))
         self.clickhouse_user = os.getenv("CLICKHOUSE_ETL_USER", os.getenv("CLICKHOUSE_ADMIN_USER", "admin"))
         self.clickhouse_password = os.getenv("CLICKHOUSE_ETL_PASSWORD", os.getenv("CLICKHOUSE_ADMIN_PASSWORD", "change_this_admin_password_in_prod"))
 

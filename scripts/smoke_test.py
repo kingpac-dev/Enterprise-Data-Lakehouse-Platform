@@ -17,18 +17,18 @@ import urllib.request
 import urllib.error
 
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
-CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT_HTTP", "8123"))
+CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT_HTTP", "18123"))
 CLICKHOUSE_USER = os.getenv("CLICKHOUSE_ADMIN_USER", "admin")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_ADMIN_PASSWORD", "change_this_admin_password_in_prod")
 
 MINIO_HOST = os.getenv("MINIO_HOST", "localhost")
-MINIO_PORT = int(os.getenv("MINIO_PORT", "9000"))
+MINIO_PORT = int(os.getenv("S3_PORT", os.getenv("MINIO_PORT", "19090")))
 
 PROMETHEUS_HOST = os.getenv("PROMETHEUS_HOST", "localhost")
-PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "9090"))
+PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "19093"))
 
 GRAFANA_HOST = os.getenv("GRAFANA_HOST", "localhost")
-GRAFANA_PORT = int(os.getenv("GRAFANA_PORT", "3000"))
+GRAFANA_PORT = int(os.getenv("GRAFANA_PORT", "13000"))
 
 
 def check_http(name: str, url: str, expected_substring: str = None) -> bool:

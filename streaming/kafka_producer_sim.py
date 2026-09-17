@@ -147,7 +147,7 @@ class StreamSimulator:
 
 def main():
     parser = argparse.ArgumentParser(description="Real-Time Kafka Event Producer for Lakehouse Streaming (M02)")
-    parser.add_argument("--broker", type=str, default=os.environ.get("KAFKA_BROKER", "localhost:9092"), help="Kafka broker host:port")
+    parser.add_argument("--broker", type=str, default=os.environ.get("KAFKA_BROKER", "localhost:19092"), help="Kafka broker host:port")
     parser.add_argument("--topic", type=str, default="enterprise.orders.events", help="Kafka destination topic")
     parser.add_argument("--rate", type=int, default=10, help="Target events per second (default: 10)")
     parser.add_argument("--count", type=int, default=50, help="Total events to produce (default: 50)")

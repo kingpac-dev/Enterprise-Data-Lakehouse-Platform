@@ -19,12 +19,12 @@ services:
       - --node-id 0
       - --check=false
       - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
-      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://${REDPANDA_ADVERTISED_HOST:-localhost}:${REDPANDA_PORT_KAFKA:-19092}
     ports:
-      - "9092:9092"
-      - "9644:9644"
+      - "${REDPANDA_PORT_KAFKA:-19092}:9092"
+      - "${REDPANDA_PORT_ADMIN:-19644}:9644"
     networks:
-      - lakehouse-net
+      - integration
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
@@ -39,16 +39,16 @@ services:
     environment:
       KAFKA_BROKERS: "redpanda:29092"
     ports:
-      - "8088:8080"
+      - "${REDPANDA_CONSOLE_PORT:-18088}:8080"
     networks:
-      - lakehouse-net
+      - integration
     depends_on:
       redpanda:
         condition: service_healthy
 
 networks:
-  lakehouse-net:
-    name: lakehouse-dev-net
+  integration:
+    name: ${INTEGRATION_NETWORK:-lakehouse-uat-integration}
     external: true
 
 volumes:

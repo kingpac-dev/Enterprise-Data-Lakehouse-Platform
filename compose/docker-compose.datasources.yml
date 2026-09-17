@@ -1,0 +1,164 @@
+name: enterprise-lakehouse-uat-datasources
+
+# ==============================================================================
+# UAT Source Systems Stack
+# Synthetic/masked test data only. This single-host topology is NOT HA.
+# Deploy the core stack first so the shared integration network exists.
+# ==============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+
+networks:
+  integration:
+    external: true
+    name: ${INTEGRATION_NETWORK:-lakehouse-uat-integration}
+
+volumes:
+  source_postgres_data:
+  source_mysql_data:
+  source_mssql_data:
+  source_mongodb_data:
+
+services:
+  source-postgres:
+    image: postgres:16.6-alpine
+    container_name: lakehouse-source-postgres
+    environment:
+      POSTGRES_DB: ${SOURCE_POSTGRES_DB:-source_uat}
+      POSTGRES_USER: ${SOURCE_POSTGRES_USER:-source_app}
+      POSTGRES_PASSWORD: ${SOURCE_POSTGRES_PASSWORD:?Set SOURCE_POSTGRES_PASSWORD in Portainer}
+    ports:
+      - "${SOURCE_POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - source_postgres_data:/var/lib/postgresql/data
+    networks:
+      integration:
+        aliases: [source-postgres]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_POSTGRES_CPU_LIMIT:-1}"
+          memory: "${SOURCE_POSTGRES_MEMORY_LIMIT:-1G}"
+    logging: *default-logging
+    restart: unless-stopped
+
+  source-mysql:
+    image: mysql:8.4.3
+    container_name: lakehouse-source-mysql
+    environment:
+      MYSQL_DATABASE: ${SOURCE_MYSQL_DB:-source_uat}
+      MYSQL_USER: ${SOURCE_MYSQL_USER:-source_app}
+      MYSQL_PASSWORD: ${SOURCE_MYSQL_PASSWORD:?Set SOURCE_MYSQL_PASSWORD in Portainer}
+      MYSQL_ROOT_PASSWORD: ${SOURCE_MYSQL_ROOT_PASSWORD:?Set SOURCE_MYSQL_ROOT_PASSWORD in Portainer}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      - "${SOURCE_MYSQL_PORT:-13306}:3306"
+    volumes:
+      - source_mysql_data:/var/lib/mysql
+    networks:
+      integration:
+        aliases: [source-mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root --password=$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_MYSQL_CPU_LIMIT:-1}"
+          memory: "${SOURCE_MYSQL_MEMORY_LIMIT:-1G}"
+    logging: *default-logging
+    restart: unless-stopped
+
+  source-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU16-ubuntu-22.04
+    container_name: lakehouse-source-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: ${SOURCE_MSSQL_EDITION:-Developer}
+      MSSQL_SA_PASSWORD: ${SOURCE_MSSQL_SA_PASSWORD:?Set SOURCE_MSSQL_SA_PASSWORD in Portainer}
+    ports:
+      - "${SOURCE_MSSQL_PORT:-11433}:1433"
+    volumes:
+      - source_mssql_data:/var/opt/mssql
+    networks:
+      integration:
+        aliases: [source-mssql]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_MSSQL_CPU_LIMIT:-2}"
+          memory: "${SOURCE_MSSQL_MEMORY_LIMIT:-3G}"
+    logging: *default-logging
+    restart: unless-stopped
+
+  source-mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-CU16-ubuntu-22.04
+    container_name: lakehouse-source-mssql-init
+    depends_on:
+      source-mssql:
+        condition: service_healthy
+    environment:
+      MSSQL_HOST: source-mssql
+      MSSQL_SA_PASSWORD: ${SOURCE_MSSQL_SA_PASSWORD:?Set SOURCE_MSSQL_SA_PASSWORD in Portainer}
+      MSSQL_DATABASE: ${SOURCE_MSSQL_DB:-source_uat}
+      MSSQL_APP_USER: ${SOURCE_MSSQL_USER:-source_app}
+      MSSQL_APP_PASSWORD: ${SOURCE_MSSQL_PASSWORD:?Set SOURCE_MSSQL_PASSWORD in Portainer}
+    volumes:
+      - ../datasources/init/init-mssql-source.sh:/opt/lakehouse/init-mssql-source.sh:ro
+    entrypoint: ["/bin/bash", "/opt/lakehouse/init-mssql-source.sh"]
+    networks:
+      - integration
+    logging: *default-logging
+    restart: "no"
+
+  source-mongodb:
+    image: mongo:8.0.4-noble
+    container_name: lakehouse-source-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${SOURCE_MONGODB_ROOT_USER:-mongo_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${SOURCE_MONGODB_ROOT_PASSWORD:?Set SOURCE_MONGODB_ROOT_PASSWORD in Portainer}
+      MONGO_INITDB_DATABASE: ${SOURCE_MONGODB_DB:-source_uat}
+      MONGO_APP_USER: ${SOURCE_MONGODB_USER:-source_app}
+      MONGO_APP_PASSWORD: ${SOURCE_MONGODB_PASSWORD:?Set SOURCE_MONGODB_PASSWORD in Portainer}
+    ports:
+      - "${SOURCE_MONGODB_PORT:-17017}:27017"
+    volumes:
+      - source_mongodb_data:/data/db
+      - ../datasources/init/init-mongodb-source.js:/docker-entrypoint-initdb.d/10-create-app-user.js:ro
+    networks:
+      integration:
+        aliases: [source-mongodb]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --host 127.0.0.1 --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --quiet --eval \"quit(db.adminCommand('ping').ok ? 0 : 2)\""]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_MONGODB_CPU_LIMIT:-1}"
+          memory: "${SOURCE_MONGODB_MEMORY_LIMIT:-1G}"
+    logging: *default-logging
+    restart: unless-stopped

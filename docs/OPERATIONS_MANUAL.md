@@ -111,7 +111,7 @@ docker compose -f compose/docker-compose.dev.yml ps
 
 ทดสอบการเชื่อมต่อ ClickHouse:
 ```bash
-curl -s http://localhost:8123/ping
+curl -s http://localhost:18123/ping
 # ผลลัพธ์ที่ถูกต้อง: Ok.
 ```
 
@@ -239,7 +239,7 @@ print(df.head())
   # Windows:
   .\scripts\manage.ps1 api-start
   ```
-- **OpenAPI Interactive Docs**: `http://<host>:8000/docs`
+- **OpenAPI Interactive Docs**: `http://<host>:18000/docs`
 - **Endpoints หลัก**:
   - `GET /api/v1/sales/daily-summary?days=7`: ดึงยอดขายสรุปรายวันจาก Serving View (ความเร็วระดับ Sub-second)
   - `GET /api/v1/sales/branch/{branch_id}`: ประสิทธิภาพยอดขายตามสาขา
@@ -350,7 +350,7 @@ docker exec -it lakehouse-redpanda rpk group describe clickhouse_orders_consumer
 
 ### 13.2 การแก้ไขปัญหา Kafka Consumer Lag
 หากพบว่า Lag สะสมสูงขึ้นผิดปกติ:
-1. ตรวจสอบว่า ClickHouse ทำงานปกติหรือไม่: `curl http://localhost:8123/ping`
+1. ตรวจสอบว่า ClickHouse ทำงานปกติหรือไม่: `curl http://localhost:18123/ping`
 2. ตรวจสอบข้อความผิดพลาดใน ClickHouse log: `docker logs lakehouse-clickhouse-dev | grep -i kafka`
 3. หากมีข้อความผิดรูปแบบ (Corrupted JSON) ClickHouse จะข้ามอัตโนมัติตามการตั้งค่า `kafka_skip_broken_messages = 100`
 
