@@ -22,6 +22,10 @@
 ### 📚 เอกสารและคู่มือการใช้งานระบบ (Key Documentation)
 - 📘 **[คู่มือการพัฒนาระบบ (Developer Guide)](docs/DEVELOPER_GUIDE.md)**: สถาปัตยกรรม, การเขียน DDL, การพัฒนา dbt models, การต่อ Ingestion, และ AI Prompt Template
 - 📕 **[คู่มือการติดตั้งและการใช้งานจริง (Operations & User Manual)](docs/OPERATIONS_MANUAL.md)**: การเตรียมเครื่อง, การติดตั้งบน Ubuntu 24 LTS, การบริหาร Portainer, การต่อ Power BI/DBeaver, และการกู้คืน DR
+- 🧪 **[คู่มือ Deploy UAT Single Node](runbooks/01_portainer_git_stack_deployment.md)**: Portainer 4-stack deployment สำหรับ UAT
+- 🏭 **[คู่มือ Deploy Production Multi-Host](runbooks/04_portainer_prod_deployment.md)**: Production readiness gates และ 3-failure-domain deployment
+- 🧭 **[UAT Architecture Design](docs/architecture/UAT_ARCHITECTURE.md)**: Single-node topology, stacks, networks และ data flow
+- 🏗️ **[Production Architecture Design](docs/architecture/PROD_ARCHITECTURE.md)**: Multi-host HA target architecture และ security zones
 - 🗺️ **[พจนานุกรมข้อมูลและผังสายธารข้อมูล (Data Catalog & Lineage)](docs/DATA_CATALOG.md)**: Interactive Mermaid Data Lineage, Table Dictionary, SLA, PII Classification และ Retention
 - 🏆 **[รายงานผลการทดสอบรับรองระบบระดับองค์กร (Enterprise Acceptance Test Report)](docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md)**: ผลการทดสอบรับรองความสมบูรณ์ 12/12 โมดูล (100% Passed) ตามมาตรฐาน AGENTS.md
 - 📗 **[กฎบัตรวิศวกรรมความปลอดภัย (AGENTS.md)](AGENTS.md)**: นโยบายการควบคุมความปลอดภัย Zero-Trust, Least Privilege และ Human Approval Gates
@@ -223,6 +227,7 @@ other stacks. See [the Portainer deployment runbook](runbooks/01_portainer_git_s
 
 - **ClickHouse HTTP**: `http://localhost:18123/ping`
 - **MinIO S3 API / Console**: `http://localhost:19090` / `http://localhost:19091`
+- **RustFS S3 API / Console** (optional profile): `http://localhost:19094` / `http://localhost:19095`
 - **Portainer UI**: `https://localhost:19443`
 - **Grafana Dashboard**: `http://localhost:13000` (User: `admin`)
 

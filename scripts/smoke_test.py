@@ -30,6 +30,11 @@ PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "19093"))
 GRAFANA_HOST = os.getenv("GRAFANA_HOST", "localhost")
 GRAFANA_PORT = int(os.getenv("GRAFANA_PORT", "13000"))
 
+RUSTFS_ENABLED = os.getenv("RUSTFS_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+RUSTFS_HOST = os.getenv("RUSTFS_HOST", "localhost")
+RUSTFS_PORT = int(os.getenv("RUSTFS_PORT", "19094"))
+RUSTFS_CONSOLE_PORT = int(os.getenv("RUSTFS_CONSOLE_PORT", "19095"))
+
 
 def check_http(name: str, url: str, expected_substring: str = None) -> bool:
     """Checks an HTTP service endpoint."""
@@ -72,6 +77,9 @@ def run_smoke_tests():
     results.append(check_http("MinIO S3 Ready Check", f"http://{MINIO_HOST}:{MINIO_PORT}/minio/health/ready"))
     results.append(check_http("Prometheus UI", f"http://{PROMETHEUS_HOST}:{PROMETHEUS_PORT}/-/healthy", "Prometheus Server is Healthy."))
     results.append(check_http("Grafana Health Check", f"http://{GRAFANA_HOST}:{GRAFANA_PORT}/api/health", "ok"))
+    if RUSTFS_ENABLED:
+        results.append(check_http("RustFS Ready Check", f"http://{RUSTFS_HOST}:{RUSTFS_PORT}/health/ready"))
+        results.append(check_http("RustFS Console Health", f"http://{RUSTFS_HOST}:{RUSTFS_CONSOLE_PORT}/rustfs/console/health"))
 
     # 2. ClickHouse Database Namespaces
     print("\n--- [2/4] ClickHouse Medallion Databases ---")
