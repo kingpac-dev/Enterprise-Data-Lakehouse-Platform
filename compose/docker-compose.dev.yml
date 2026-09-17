@@ -147,7 +147,7 @@ services:
   # ----------------------------------------------------------------------------
   clickhouse:
     image: ${CLICKHOUSE_UAT_IMAGE:-lakehouse/clickhouse-uat:26.8}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-clickhouse-dev
     depends_on:
       minio:
@@ -203,7 +203,7 @@ services:
   dbt-runner:
     profiles: ["tools"]
     image: ${DBT_RUNNER_UAT_IMAGE:-lakehouse/dbt-runner-uat:1.8.6}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-dbt-runner
     depends_on:
       - clickhouse
@@ -221,7 +221,7 @@ services:
   serving-api:
     profiles: ["api"]
     image: ${SERVING_API_UAT_IMAGE:-lakehouse/serving-api-uat:1.0.0}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-serving-api
     depends_on:
       - clickhouse

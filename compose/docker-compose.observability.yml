@@ -23,7 +23,7 @@ services:
   # ----------------------------------------------------------------------------
   prometheus:
     image: ${PROMETHEUS_UAT_IMAGE:-lakehouse/prometheus-uat:2.54.0}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -43,7 +43,7 @@ services:
   # ----------------------------------------------------------------------------
   grafana:
     image: ${GRAFANA_UAT_IMAGE:-lakehouse/grafana-uat:11.1.4}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-grafana
     depends_on:
       - prometheus
@@ -66,7 +66,7 @@ services:
   # ----------------------------------------------------------------------------
   loki:
     image: ${LOKI_UAT_IMAGE:-lakehouse/loki-uat:3.1.1}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-loki
     command: -config.file=/etc/loki/local-config.yaml
     ports:

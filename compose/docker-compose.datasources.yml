@@ -114,7 +114,7 @@ services:
 
   source-mssql-init:
     image: ${SOURCE_MSSQL_INIT_IMAGE:-lakehouse/source-mssql-init:2022-CU16}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-source-mssql-init
     depends_on:
       source-mssql:
@@ -132,7 +132,7 @@ services:
 
   source-mongodb:
     image: ${SOURCE_MONGODB_UAT_IMAGE:-lakehouse/source-mongodb:8.0.4}
-    pull_policy: ${UAT_CUSTOM_IMAGE_PULL_POLICY:-missing}
+    pull_policy: missing
     container_name: lakehouse-source-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${SOURCE_MONGODB_ROOT_USER:-mongo_admin}

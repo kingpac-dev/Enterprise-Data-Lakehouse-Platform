@@ -147,9 +147,9 @@ sudo docker image inspect \
   lakehouse/loki-uat:3.1.1 >/dev/null
 ```
 
-เมื่อใช้ local images ให้กำหนด `UAT_CUSTOM_IMAGE_PULL_POLICY=never` ในแต่ละ Portainer Stack
-เพื่อไม่ให้ Portainer พยายาม pull ชื่อ `lakehouse/*` จาก public registry หากใช้ Harbor ให้กำหนด
-เป็น `missing` และใช้ immutable tag/digest ที่เปลี่ยนทุก release
+Deployment Compose กำหนด `pull_policy: missing`: ถ้ามี local image อยู่แล้วจะใช้งานทันที
+แต่ถ้าไม่มีจะพยายาม pull จาก registry ดังนั้นต้อง build local images ให้ครบ หรือกำหนด
+`*_UAT_IMAGE` เป็น Harbor reference ที่ใช้ immutable tag/digest ก่อน deploy
 
 ถ้าจะ deploy เฉพาะ Observability สามารถ build เฉพาะสาม images ได้:
 
@@ -207,7 +207,6 @@ OBSERVABILITY_NETWORK=lakehouse-uat-observability
 CLICKHOUSE_PORT_HTTP=18123
 CLICKHOUSE_PORT_NATIVE=19000
 CLICKHOUSE_PORT_PROMETHEUS=19363
-UAT_CUSTOM_IMAGE_PULL_POLICY=never
 CLICKHOUSE_UAT_IMAGE=lakehouse/clickhouse-uat:26.8
 CLICKHOUSE_ADMIN_USER=admin
 CLICKHOUSE_ADMIN_PASSWORD=<STRONG_SECRET>
@@ -297,7 +296,6 @@ Environment variables:
 
 ```dotenv
 INTEGRATION_NETWORK=lakehouse-uat-integration
-UAT_CUSTOM_IMAGE_PULL_POLICY=never
 SOURCE_POSTGRES_PORT=15432
 SOURCE_POSTGRES_DB=source_uat
 SOURCE_POSTGRES_USER=source_app
@@ -385,7 +383,6 @@ Compose path: compose/docker-compose.observability.yml
 
 ```dotenv
 OBSERVABILITY_NETWORK=lakehouse-uat-observability
-UAT_CUSTOM_IMAGE_PULL_POLICY=never
 PROMETHEUS_UAT_IMAGE=lakehouse/prometheus-uat:2.54.0
 GRAFANA_UAT_IMAGE=lakehouse/grafana-uat:11.1.4
 LOKI_UAT_IMAGE=lakehouse/loki-uat:3.1.1
