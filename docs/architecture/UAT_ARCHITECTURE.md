@@ -66,14 +66,15 @@ flowchart LR
 
 | Stack | Lifecycle ownership | Persistent state | Shared network |
 |---|---|---|---|
+| Shared Docker networks | Platform/DevOps | None | Integration + Observability |
 | Core | Data Platform | ClickHouse, MinIO | Integration + Observability |
 | Core optional profile | Data Platform | RustFS | Integration + Observability |
 | Data Sources | UAT/DBA | PostgreSQL, MySQL, SQL Server, MongoDB | Integration |
 | Streaming | Data Platform | Redpanda log | Integration |
 | Observability | SRE | Prometheus, Grafana, Loki | Observability |
 
-Core ต้อง deploy ก่อน เพราะเป็นผู้สร้าง shared networks จากนั้น deploy Data Sources,
-Streaming และ Observability ตามลำดับ
+Platform/DevOps ต้องสร้าง shared external networks บน UAT Docker endpoint ก่อน จากนั้น
+deploy Core, Data Sources, Streaming และ Observability ตามลำดับ
 
 ## 4. Data Flow
 
