@@ -286,6 +286,23 @@ REDPANDA_CONSOLE_PORT=18088
 `REDPANDA_ADVERTISED_HOST` ต้องเป็น IP/DNS ที่ external Kafka clients resolve ได้จริง
 ห้ามปล่อยเป็น `localhost` หรือ `TBD` จากนั้น deploy และรอให้ Redpanda เป็น `healthy`
 
+หาก Portainer แสดง `dependency failed to start: container lakehouse-redpanda is
+unhealthy` ให้ตรวจที่ Docker host:
+
+```bash
+sudo docker logs --tail 200 lakehouse-redpanda
+sudo docker inspect --format '{{json .State.Health}}' lakehouse-redpanda
+sudo docker exec lakehouse-redpanda rpk cluster info
+sudo docker exec lakehouse-redpanda rpk cluster health
+```
+
+ผลที่ต้องการคือ `Healthy: true`, ไม่มี nodes down, leaderless partitions หรือ
+under-replicated partitions Health check ใน Compose ใช้
+`rpk cluster health --exit-when-healthy` และไม่ parse ตัวอักษรจาก output
+
+หลังแก้ Compose ให้ commit/push approved reference แล้วกด **Update the stack**
+ไม่จำเป็นต้องลบ `redpanda_data` volume สำหรับปัญหา health check นี้
+
 ## 9. Deploy Stack 4: UAT Observability
 
 ```text

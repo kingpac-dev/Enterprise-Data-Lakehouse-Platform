@@ -28,10 +28,14 @@ services:
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health | grep -q 'HEALTHY'"]
+      # rpk returns exit code 0 only after the cluster is healthy. Avoid parsing
+      # human-readable output such as "Healthy: true", which changes by version.
+      test: ["CMD", "rpk", "cluster", "health", "--exit-when-healthy"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
 
   redpanda-console:
     image: docker.redpanda.com/redpandadata/console:v2.7.2
@@ -45,6 +49,7 @@ services:
     depends_on:
       redpanda:
         condition: service_healthy
+    restart: unless-stopped
 
 networks:
   integration:
