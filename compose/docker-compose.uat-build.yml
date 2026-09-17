@@ -1,0 +1,56 @@
+name: enterprise-lakehouse-uat-images
+
+# ==============================================================================
+# Build-only definition for UAT custom images.
+# Do not select this file as a Portainer Stack compose path.
+# Build on the UAT Docker host or in CI, then publish immutable tags to Harbor.
+# ==============================================================================
+
+services:
+  clickhouse-uat:
+    image: ${CLICKHOUSE_UAT_IMAGE:-lakehouse/clickhouse-uat:26.8}
+    build:
+      context: ..
+      dockerfile: clickhouse/Dockerfile.uat
+
+  dbt-runner-uat:
+    image: ${DBT_RUNNER_UAT_IMAGE:-lakehouse/dbt-runner-uat:1.8.6}
+    build:
+      context: ../dbt
+      dockerfile: Dockerfile
+
+  serving-api-uat:
+    image: ${SERVING_API_UAT_IMAGE:-lakehouse/serving-api-uat:1.0.0}
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+
+  source-mssql-init:
+    image: ${SOURCE_MSSQL_INIT_IMAGE:-lakehouse/source-mssql-init:2022-CU16}
+    build:
+      context: ../datasources
+      dockerfile: Dockerfile.mssql-init
+
+  source-mongodb-uat:
+    image: ${SOURCE_MONGODB_UAT_IMAGE:-lakehouse/source-mongodb:8.0.4}
+    build:
+      context: ../datasources
+      dockerfile: Dockerfile.mongodb
+
+  prometheus-uat:
+    image: ${PROMETHEUS_UAT_IMAGE:-lakehouse/prometheus-uat:2.54.0}
+    build:
+      context: ../monitoring/prometheus
+      dockerfile: Dockerfile.uat
+
+  grafana-uat:
+    image: ${GRAFANA_UAT_IMAGE:-lakehouse/grafana-uat:11.1.4}
+    build:
+      context: ../monitoring/grafana
+      dockerfile: Dockerfile.uat
+
+  loki-uat:
+    image: ${LOKI_UAT_IMAGE:-lakehouse/loki-uat:3.1.1}
+    build:
+      context: ../monitoring/loki
+      dockerfile: Dockerfile.uat

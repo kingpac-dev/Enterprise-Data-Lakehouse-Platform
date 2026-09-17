@@ -121,6 +121,48 @@ verification เพื่อแก้ปัญหาการ pull image
 ใช้ approved release tag หรือ commit SHA ไม่ควร deploy จาก `main` โดยตรงหากยังไม่มี
 CI และ human approval gate
 
+### Build custom UAT images ก่อนเข้า Portainer
+
+ไฟล์ Compose ที่ใช้ deploy ผ่าน Portainer ไม่มี `build:` เพื่อหลีกเลี่ยงการส่ง BuildKit/gRPC
+ผ่าน Portainer Agent ให้ build บน Docker endpoint host โดยตรง หรือ build ใน CI แล้ว push
+เข้า Harbor ก่อน deploy ห้ามเลือก `compose/docker-compose.uat-build.yml` เป็น Stack compose path
+
+สำหรับ UAT host ที่ยังไม่มี Harbor ให้ checkout approved reference บน **เครื่อง Docker endpoint
+เดียวกับที่ Portainer environment ชี้อยู่** แล้ว build local images:
+
+```bash
+git fetch --tags
+git checkout <APPROVED_RELEASE_TAG_OR_SHA>
+
+sudo docker buildx inspect --bootstrap
+sudo docker compose --env-file .env.example \
+  -f compose/docker-compose.uat-build.yml build --pull
+
+sudo docker image inspect \
+  lakehouse/clickhouse-uat:26.8 \
+  lakehouse/source-mssql-init:2022-CU16 \
+  lakehouse/source-mongodb:8.0.4 \
+  lakehouse/prometheus-uat:2.54.0 \
+  lakehouse/grafana-uat:11.1.4 \
+  lakehouse/loki-uat:3.1.1 >/dev/null
+```
+
+เมื่อใช้ local images ให้กำหนด `UAT_CUSTOM_IMAGE_PULL_POLICY=never` ในแต่ละ Portainer Stack
+เพื่อไม่ให้ Portainer พยายาม pull ชื่อ `lakehouse/*` จาก public registry หากใช้ Harbor ให้กำหนด
+เป็น `missing` และใช้ immutable tag/digest ที่เปลี่ยนทุก release
+
+ถ้าจะ deploy เฉพาะ Observability สามารถ build เฉพาะสาม images ได้:
+
+```bash
+sudo docker compose --env-file .env.example \
+  -f compose/docker-compose.uat-build.yml build --pull \
+  prometheus-uat grafana-uat loki-uat
+```
+
+แนวทางที่แนะนำสำหรับงานองค์กรคือให้ Jenkins build, Trivy scan และ push images ด้วย
+immutable release tag/digest เข้า Harbor จากนั้นเพิ่ม Harbor ใน **Portainer > Registries** และ
+กำหนดตัวแปร `*_UAT_IMAGE` เป็น Harbor reference ห้ามเก็บ registry password ใน Git
+
 ## 6. Deploy Stack 1: UAT Core
 
 ใน Portainer ไปที่ **Environments > Local > Stacks > Add stack > Repository**:
@@ -141,6 +183,8 @@ OBSERVABILITY_NETWORK=lakehouse-uat-observability
 CLICKHOUSE_PORT_HTTP=18123
 CLICKHOUSE_PORT_NATIVE=19000
 CLICKHOUSE_PORT_PROMETHEUS=19363
+UAT_CUSTOM_IMAGE_PULL_POLICY=never
+CLICKHOUSE_UAT_IMAGE=lakehouse/clickhouse-uat:26.8
 CLICKHOUSE_ADMIN_USER=admin
 CLICKHOUSE_ADMIN_PASSWORD=<STRONG_SECRET>
 CLICKHOUSE_ETL_PASSWORD=<STRONG_SECRET>
@@ -159,6 +203,7 @@ CLICKHOUSE_CPU_LIMIT=4
 CLICKHOUSE_MEMORY_LIMIT=8G
 CLICKHOUSE_MEMORY_RESERVATION=4G
 SERVING_API_PORT=18000
+SERVING_API_UAT_IMAGE=lakehouse/serving-api-uat:1.0.0
 ```
 
 แทนค่าทุก `<STRONG_SECRET>` และ `<STRONG_ACCESS_KEY>` ด้วยค่าจริงก่อน Deploy
@@ -228,6 +273,7 @@ Environment variables:
 
 ```dotenv
 INTEGRATION_NETWORK=lakehouse-uat-integration
+UAT_CUSTOM_IMAGE_PULL_POLICY=never
 SOURCE_POSTGRES_PORT=15432
 SOURCE_POSTGRES_DB=source_uat
 SOURCE_POSTGRES_USER=source_app
@@ -243,12 +289,14 @@ SOURCE_MSSQL_SA_PASSWORD=<STRONG_SA_SECRET>
 SOURCE_MSSQL_DB=source_uat
 SOURCE_MSSQL_USER=source_app
 SOURCE_MSSQL_PASSWORD=<STRONG_APP_SECRET>
+SOURCE_MSSQL_INIT_IMAGE=lakehouse/source-mssql-init:2022-CU16
 SOURCE_MONGODB_PORT=17017
 SOURCE_MONGODB_DB=source_uat
 SOURCE_MONGODB_ROOT_USER=mongo_admin
 SOURCE_MONGODB_ROOT_PASSWORD=<STRONG_ROOT_SECRET>
 SOURCE_MONGODB_USER=source_app
 SOURCE_MONGODB_PASSWORD=<STRONG_APP_SECRET>
+SOURCE_MONGODB_UAT_IMAGE=lakehouse/source-mongodb:8.0.4
 ```
 
 กด **Deploy the stack** แล้วตรวจ PostgreSQL, MySQL, SQL Server และ MongoDB เป็น
@@ -313,6 +361,10 @@ Compose path: compose/docker-compose.observability.yml
 
 ```dotenv
 OBSERVABILITY_NETWORK=lakehouse-uat-observability
+UAT_CUSTOM_IMAGE_PULL_POLICY=never
+PROMETHEUS_UAT_IMAGE=lakehouse/prometheus-uat:2.54.0
+GRAFANA_UAT_IMAGE=lakehouse/grafana-uat:11.1.4
+LOKI_UAT_IMAGE=lakehouse/loki-uat:3.1.1
 PROMETHEUS_PORT=19093
 GRAFANA_PORT=13000
 LOKI_PORT=13100
@@ -320,9 +372,9 @@ GRAFANA_ADMIN_USER=admin
 GRAFANA_ADMIN_PASSWORD=<STRONG_SECRET>
 ```
 
-Compose ชุด UAT จะ build image ของ Prometheus, Grafana และ Loki จากไฟล์ config ใน Git
-โดยใช้ `pull_policy: build` จึงไม่ต้องเพิ่มไฟล์ใน **Additional paths** และไม่ใช้ relative
-bind mount สำหรับ config เมื่อ deploy ผ่าน Portainer Git Stack
+Compose ชุด UAT จะ pull หรือใช้ images ที่ build ไว้บน endpoint host แล้ว จึงไม่ส่ง build
+ผ่าน Portainer Agent ไม่ต้องเพิ่มไฟล์ใน **Additional paths** และไม่ใช้ relative bind mount
+สำหรับ config เมื่อ deploy ผ่าน Portainer Git Stack
 
 Deploy แล้วตรวจ Prometheus, Grafana และ Loki เป็น `running` จากนั้นเปิด Prometheus
 **Status > Targets** และยืนยันว่า `clickhouse:9363` กับ `minio:9000` เป็น `UP`
@@ -336,9 +388,21 @@ to "/etc/loki/local-config.yaml": not a directory
 
 สาเหตุคือ repository อยู่ใน filesystem ของ Portainer container แต่ Docker daemon พยายาม
 resolve relative bind mount บน host ทำให้ source file กลายเป็น directory หรือหาไม่พบ ให้ใช้
-release ที่มี `Dockerfile.uat` และ `pull_policy: build` แล้วกด **Update the stack** โดยเปิด
-**Re-pull image and redeploy** หาก UI แสดงตัวเลือกนี้ ไม่ต้องสร้าง path ใต้ `/data/compose`
+release ที่มี custom image แล้วกด **Update the stack** ไม่ต้องสร้าง path ใต้ `/data/compose`
 ด้วยตนเอง และไม่ต้องลบ named volumes เพื่อแก้ error นี้
+
+หากพบ error ต่อไปนี้ในขั้น build:
+
+```text
+listing workers for Build: ... http2: frame too large,
+note that the frame header looked like an HTTP/1.1 header
+```
+
+แสดงว่า BuildKit/gRPC ถูกส่งผ่าน Portainer Agent/proxy แล้วได้รับ HTTP/1.1 response ให้ยืนยันว่า
+Stack compose path เป็น `compose/docker-compose.observability.yml` ซึ่งไม่มี `build:` จากนั้น
+build images บน endpoint host ตามหัวข้อ **Build custom UAT images ก่อนเข้า Portainer** หรือใช้
+images จาก Harbor ไม่แนะนำให้ตั้ง `DOCKER_BUILDKIT=0` เป็นวิธีถาวร เพราะเป็นเพียง workaround
+ที่ปิด build backend รุ่นปัจจุบันและไม่แก้ agent/proxy configuration
 
 ## 10. ตรวจสอบหลัง Deploy
 
