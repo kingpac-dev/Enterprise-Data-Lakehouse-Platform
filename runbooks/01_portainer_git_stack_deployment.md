@@ -140,12 +140,21 @@ sudo docker compose --env-file .env.example \
 
 sudo docker image inspect \
   lakehouse/clickhouse-uat:26.8 \
+  lakehouse/dbt-runner-uat:1.8.6 \
+  lakehouse/serving-api-uat:1.0.0 \
   lakehouse/source-mssql-init:2022-CU16 \
   lakehouse/source-mongodb:8.0.4 \
   lakehouse/prometheus-uat:2.54.0 \
   lakehouse/grafana-uat:11.1.4 \
   lakehouse/loki-uat:3.1.1 >/dev/null
 ```
+
+> [!IMPORTANT]
+> คำสั่ง `docker image inspect` ด้านบนเป็น mandatory deployment gate ต้องจบด้วย exit code
+> `0` บน Docker endpoint host ก่อนกด Deploy Stack ใดใน Portainer หากพบ
+> `pull access denied for lakehouse/<image>` แสดงว่ายังข้ามขั้นตอน build/publish image
+> การรัน `docker login` อย่างเดียวไม่สามารถแก้ได้ เพราะชื่อ `lakehouse/*` เป็น local tags
+> และไม่มี repository บน public registry
 
 Deployment Compose กำหนด `pull_policy: missing`: ถ้ามี local image อยู่แล้วจะใช้งานทันที
 แต่ถ้าไม่มีจะพยายาม pull จาก registry ดังนั้นต้อง build local images ให้ครบ หรือกำหนด
@@ -162,6 +171,19 @@ sudo docker compose --env-file .env.example \
 แนวทางที่แนะนำสำหรับงานองค์กรคือให้ Jenkins build, Trivy scan และ push images ด้วย
 immutable release tag/digest เข้า Harbor จากนั้นเพิ่ม Harbor ใน **Portainer > Registries** และ
 กำหนดตัวแปร `*_UAT_IMAGE` เป็น Harbor reference ห้ามเก็บ registry password ใน Git
+ดูขั้นตอนติดตั้งและเชื่อมต่อที่
+[Runbook 05: Harbor Registry สำหรับ UAT และ Portainer](05_harbor_uat_registry.md)
+
+สำหรับ remote Docker environment ห้ามใส่ `build:` กลับเข้า Portainer deployment Compose
+เพราะ Portainer 2.29.2 ขึ้นไปยังไม่รองรับ Compose build บน remote environment อย่างเสถียร
+Git repository เป็น source ของ Compose/config และ CI เป็นผู้สร้าง images ตาม flow:
+
+```text
+GitHub -> Jenkins/CI -> Trivy scan -> Harbor -> Portainer Git Stack -> UAT Docker endpoint
+```
+
+ก่อนสร้าง Stack จาก Git ให้เพิ่ม Harbor ที่ **Portainer > Registries** และยืนยันว่า endpoint
+pull approved release images ได้ครบ หากไม่มี Harbor ให้ใช้ local-build workflow ด้านบนแทน
 
 ### สร้าง shared external networks ก่อนทุก Stack
 
@@ -207,7 +229,8 @@ OBSERVABILITY_NETWORK=lakehouse-uat-observability
 CLICKHOUSE_PORT_HTTP=18123
 CLICKHOUSE_PORT_NATIVE=19000
 CLICKHOUSE_PORT_PROMETHEUS=19363
-CLICKHOUSE_UAT_IMAGE=lakehouse/clickhouse-uat:26.8
+CLICKHOUSE_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/clickhouse-uat:<RELEASE_TAG>
+DBT_RUNNER_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/dbt-runner-uat:<RELEASE_TAG>
 CLICKHOUSE_ADMIN_USER=admin
 CLICKHOUSE_ADMIN_PASSWORD=<STRONG_SECRET>
 CLICKHOUSE_ETL_PASSWORD=<STRONG_SECRET>
@@ -226,7 +249,7 @@ CLICKHOUSE_CPU_LIMIT=4
 CLICKHOUSE_MEMORY_LIMIT=8G
 CLICKHOUSE_MEMORY_RESERVATION=4G
 SERVING_API_PORT=18000
-SERVING_API_UAT_IMAGE=lakehouse/serving-api-uat:1.0.0
+SERVING_API_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/serving-api-uat:<RELEASE_TAG>
 ```
 
 แทนค่าทุก `<STRONG_SECRET>` และ `<STRONG_ACCESS_KEY>` ด้วยค่าจริงก่อน Deploy
@@ -311,14 +334,14 @@ SOURCE_MSSQL_SA_PASSWORD=<STRONG_SA_SECRET>
 SOURCE_MSSQL_DB=source_uat
 SOURCE_MSSQL_USER=source_app
 SOURCE_MSSQL_PASSWORD=<STRONG_APP_SECRET>
-SOURCE_MSSQL_INIT_IMAGE=lakehouse/source-mssql-init:2022-CU16
+SOURCE_MSSQL_INIT_IMAGE=<HARBOR_HOST>/<PROJECT>/source-mssql-init:<RELEASE_TAG>
 SOURCE_MONGODB_PORT=17017
 SOURCE_MONGODB_DB=source_uat
 SOURCE_MONGODB_ROOT_USER=mongo_admin
 SOURCE_MONGODB_ROOT_PASSWORD=<STRONG_ROOT_SECRET>
 SOURCE_MONGODB_USER=source_app
 SOURCE_MONGODB_PASSWORD=<STRONG_APP_SECRET>
-SOURCE_MONGODB_UAT_IMAGE=lakehouse/source-mongodb:8.0.4
+SOURCE_MONGODB_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/source-mongodb:<RELEASE_TAG>
 ```
 
 กด **Deploy the stack** แล้วตรวจ PostgreSQL, MySQL, SQL Server และ MongoDB เป็น
@@ -383,9 +406,9 @@ Compose path: compose/docker-compose.observability.yml
 
 ```dotenv
 OBSERVABILITY_NETWORK=lakehouse-uat-observability
-PROMETHEUS_UAT_IMAGE=lakehouse/prometheus-uat:2.54.0
-GRAFANA_UAT_IMAGE=lakehouse/grafana-uat:11.1.4
-LOKI_UAT_IMAGE=lakehouse/loki-uat:3.1.1
+PROMETHEUS_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/prometheus-uat:<RELEASE_TAG>
+GRAFANA_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/grafana-uat:<RELEASE_TAG>
+LOKI_UAT_IMAGE=<HARBOR_HOST>/<PROJECT>/loki-uat:<RELEASE_TAG>
 PROMETHEUS_PORT=19093
 GRAFANA_PORT=13000
 LOKI_PORT=13100
@@ -396,6 +419,24 @@ GRAFANA_ADMIN_PASSWORD=<STRONG_SECRET>
 Compose ชุด UAT จะ pull หรือใช้ images ที่ build ไว้บน endpoint host แล้ว จึงไม่ส่ง build
 ผ่าน Portainer Agent ไม่ต้องเพิ่มไฟล์ใน **Additional paths** และไม่ใช้ relative bind mount
 สำหรับ config เมื่อ deploy ผ่าน Portainer Git Stack
+
+หากพบ `pull access denied for lakehouse/prometheus-uat` หรือข้อความเดียวกันสำหรับ Grafana/Loki
+หมายถึง custom images ยังไม่มีบน Docker endpoint และไม่มี repository ชื่อนี้ใน public registry
+ให้ SSH เข้า endpoint host แล้ว checkout Git reference เดียวกับ Stack จากนั้นรัน:
+
+```bash
+sudo docker compose --env-file .env.example \
+  -f compose/docker-compose.uat-build.yml build --pull \
+  prometheus-uat grafana-uat loki-uat
+
+sudo docker image inspect \
+  lakehouse/prometheus-uat:2.54.0 \
+  lakehouse/grafana-uat:11.1.4 \
+  lakehouse/loki-uat:3.1.1 >/dev/null
+```
+
+เมื่อคำสั่ง `image inspect` สำเร็จจึงกด Deploy อีกครั้ง หากใช้ Harbor ให้เปลี่ยนตัวแปร
+สามรายการเป็น Harbor image references และตั้ง Registry credential ใน Portainer แทน
 
 Deploy แล้วตรวจ Prometheus, Grafana และ Loki เป็น `running` จากนั้นเปิด Prometheus
 **Status > Targets** และยืนยันว่า `clickhouse:9363` กับ `minio:9000` เป็น `UP`

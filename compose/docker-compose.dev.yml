@@ -146,7 +146,7 @@ services:
   # 2. ClickHouse Analytics & Serving Engine (26.8 LTS)
   # ----------------------------------------------------------------------------
   clickhouse:
-    image: ${CLICKHOUSE_UAT_IMAGE:-lakehouse/clickhouse-uat:26.8}
+    image: ${CLICKHOUSE_UAT_IMAGE:?Set CLICKHOUSE_UAT_IMAGE to a prebuilt registry image}
     pull_policy: missing
     container_name: lakehouse-clickhouse-dev
     depends_on:
@@ -202,7 +202,7 @@ services:
   # ----------------------------------------------------------------------------
   dbt-runner:
     profiles: ["tools"]
-    image: ${DBT_RUNNER_UAT_IMAGE:-lakehouse/dbt-runner-uat:1.8.6}
+    image: ${DBT_RUNNER_UAT_IMAGE:?Set DBT_RUNNER_UAT_IMAGE to a prebuilt registry image}
     pull_policy: missing
     container_name: lakehouse-dbt-runner
     depends_on:
@@ -220,7 +220,7 @@ services:
   # ----------------------------------------------------------------------------
   serving-api:
     profiles: ["api"]
-    image: ${SERVING_API_UAT_IMAGE:-lakehouse/serving-api-uat:1.0.0}
+    image: ${SERVING_API_UAT_IMAGE:?Set SERVING_API_UAT_IMAGE to a prebuilt registry image}
     pull_policy: missing
     container_name: lakehouse-serving-api
     depends_on:

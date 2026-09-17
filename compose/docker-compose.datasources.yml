@@ -113,7 +113,7 @@ services:
     restart: unless-stopped
 
   source-mssql-init:
-    image: ${SOURCE_MSSQL_INIT_IMAGE:-lakehouse/source-mssql-init:2022-CU16}
+    image: ${SOURCE_MSSQL_INIT_IMAGE:?Set SOURCE_MSSQL_INIT_IMAGE to a prebuilt registry image}
     pull_policy: missing
     container_name: lakehouse-source-mssql-init
     depends_on:
@@ -131,7 +131,7 @@ services:
     restart: "no"
 
   source-mongodb:
-    image: ${SOURCE_MONGODB_UAT_IMAGE:-lakehouse/source-mongodb:8.0.4}
+    image: ${SOURCE_MONGODB_UAT_IMAGE:?Set SOURCE_MONGODB_UAT_IMAGE to a prebuilt registry image}
     pull_policy: missing
     container_name: lakehouse-source-mongodb
     environment:
