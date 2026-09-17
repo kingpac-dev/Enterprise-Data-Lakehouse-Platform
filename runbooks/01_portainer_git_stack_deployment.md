@@ -163,6 +163,30 @@ sudo docker compose --env-file .env.example \
 immutable release tag/digest เข้า Harbor จากนั้นเพิ่ม Harbor ใน **Portainer > Registries** และ
 กำหนดตัวแปร `*_UAT_IMAGE` เป็น Harbor reference ห้ามเก็บ registry password ใน Git
 
+### สร้าง shared external networks ก่อนทุก Stack
+
+รันบน **Docker endpoint host เดียวกับที่ Portainer environment ชี้อยู่** เพียงครั้งเดียว
+ก่อน deploy Core, Data Sources, Streaming หรือ Observability:
+
+```bash
+sudo docker network inspect lakehouse-uat-integration >/dev/null 2>&1 || \
+  sudo docker network create --driver bridge lakehouse-uat-integration
+
+sudo docker network inspect lakehouse-uat-observability >/dev/null 2>&1 || \
+  sudo docker network create --driver bridge lakehouse-uat-observability
+
+sudo docker network inspect lakehouse-uat-integration >/dev/null
+sudo docker network inspect lakehouse-uat-observability >/dev/null
+```
+
+ใน Portainer สามารถตรวจได้ที่ **Environment > Networks** ชื่อ network ต้องตรงทุกตัวอักษร
+กับ environment variables และต้องอยู่บน endpoint เดียวกัน การสร้าง network บน Portainer
+Server คนละเครื่องจะไม่ทำให้ network ปรากฏบน UAT endpoint
+
+หากพบ `network ... declared as external, but could not be found` ให้สร้าง network ที่ขาด
+บน endpoint นี้ก่อนแล้วกด Deploy/Update Stack อีกครั้ง ไม่ต้องแก้ `external: true` เป็น false
+เพราะ network ทั้งสองเป็นขอบเขตร่วมระหว่างหลาย stacks
+
 ## 6. Deploy Stack 1: UAT Core
 
 ใน Portainer ไปที่ **Environments > Local > Stacks > Add stack > Repository**:
@@ -252,14 +276,14 @@ CLICKHOUSE_S3_SECRET_KEY=<RUSTFS_SECRET_KEY_VALUE>
 ห้ามใช้ MinIO และ RustFS เป็นสำเนากันโดยถือว่าเป็น backup จนกว่าจะมี replication,
 retention และ restore drill ที่ผ่านการตรวจจริง
 
-ตรวจ networks ที่ Core เป็นผู้สร้าง:
+ตรวจ shared external networks ที่เตรียมไว้ก่อน deploy:
 
 ```bash
 sudo docker network inspect lakehouse-uat-integration >/dev/null
 sudo docker network inspect lakehouse-uat-observability >/dev/null
 ```
 
-ห้าม deploy stacks ถัดไปจนกว่าสอง networks นี้จะมีอยู่จริง
+ห้าม deploy stack ใดจนกว่าสอง networks นี้จะมีอยู่จริง
 
 ## 7. Deploy Stack 2: UAT Data Sources
 
@@ -477,9 +501,9 @@ Git rollback ไม่ได้ rollback schema หรือข้อมูล �
 
 ## 13. ลำดับการหยุดระบบ
 
-หยุดย้อนลำดับ: Observability > Streaming > Data Sources > Core อย่าลบ Core ก่อน
-dependent stacks เพราะ Core เป็นเจ้าของ shared networks และห้าม remove volumes หากไม่มี
-written approval พร้อม verified backup/restore evidence
+หยุดย้อนลำดับ: Observability > Streaming > Data Sources > Core ห้ามลบ shared external
+networks ขณะที่ยังมี stack ใดเชื่อมต่ออยู่ และห้าม remove volumes หากไม่มี written approval
+พร้อม verified backup/restore evidence
 
 ## Handoff Contract
 

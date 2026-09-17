@@ -187,8 +187,9 @@ UAT is deployed as four independently managed Portainer Git-backed stacks:
 3. Streaming — Redpanda and Redpanda Console.
 4. Observability — Prometheus, Grafana, and Loki.
 
-Deploy Core first because it owns the two shared Docker networks used by the
-other stacks. See [the Portainer deployment runbook](runbooks/01_portainer_git_stack_deployment.md).
+Pre-create the two shared external Docker networks on the UAT endpoint, then
+deploy Core before the dependent stacks. See
+[the Portainer deployment runbook](runbooks/01_portainer_git_stack_deployment.md).
 
 เริ่มใช้งานอย่างรวดเร็วด้วย **Developer CLI**:
 

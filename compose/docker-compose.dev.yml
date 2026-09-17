@@ -8,12 +8,12 @@ name: enterprise-lakehouse-uat-core
 networks:
   data_backend:
     name: ${INTEGRATION_NETWORK:-lakehouse-uat-integration}
-    driver: bridge
+    external: true
   data_storage:
     driver: bridge
   observability:
     name: ${OBSERVABILITY_NETWORK:-lakehouse-uat-observability}
-    driver: bridge
+    external: true
   management:
     driver: bridge
 
