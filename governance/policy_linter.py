@@ -14,6 +14,7 @@ Mandatory Policy Rules:
 [RULE-05] Least-Privilege Role & Memory Quota Configuration
 [RULE-06] ClickHouse from_env substitutions require external values (no inline fallback)
 [RULE-07] ClickHouse logger and system-log configuration is structurally valid
+[RULE-08] ClickHouse Docker user provisioning has a single authoritative source
 """
 
 import os
@@ -252,6 +253,72 @@ class PolicyLinter:
         })
         return passed
 
+    def check_rule_08_clickhouse_docker_user_setup(self) -> bool:
+        """RULE-08: Prevents entrypoint/custom XML from defining admin twice."""
+        violations = []
+        users_path = os.path.join(self.root_dir, "clickhouse/users.d/users.xml")
+
+        try:
+            root = ET.parse(users_path).getroot()
+        except (OSError, ET.ParseError) as exc:
+            violations.append(f"users.xml parse error: {exc}")
+        else:
+            default_user = root.find("./users/default")
+            if default_user is None or default_user.attrib.get("remove") != "remove":
+                violations.append("users.xml must explicitly remove the image default user")
+
+            admin_password = root.find("./users/admin/password")
+            if admin_password is None or admin_password.attrib.get("from_env") != "CLICKHOUSE_ADMIN_PASSWORD":
+                violations.append("users.xml admin password must come from CLICKHOUSE_ADMIN_PASSWORD")
+
+        compose_paths = [
+            "compose/docker-compose.dev.yml",
+            "compose/docker-compose.prod-node1.yml",
+            "compose/docker-compose.prod-node2.yml",
+        ]
+        skip_setup_pattern = re.compile(
+            r"CLICKHOUSE_SKIP_USER_SETUP\s*:\s*(?:[\"']?1[\"']?|"
+            r"\$\{CLICKHOUSE_SKIP_USER_SETUP:-1\})"
+        )
+        for relative_path in compose_paths:
+            config_path = os.path.join(self.root_dir, relative_path)
+            try:
+                with open(config_path, "r", encoding="utf-8") as config_file:
+                    content = config_file.read()
+            except OSError as exc:
+                violations.append(f"{relative_path}: {exc}")
+                continue
+            if not skip_setup_pattern.search(content):
+                violations.append(
+                    f"{relative_path}: CLICKHOUSE_SKIP_USER_SETUP must be 1"
+                )
+
+        workflow_path = os.path.join(
+            self.root_dir, ".github/workflows/publish-uat-images.yml"
+        )
+        try:
+            with open(workflow_path, "r", encoding="utf-8") as workflow_file:
+                workflow_content = workflow_file.read()
+        except OSError as exc:
+            violations.append(f"publish workflow: {exc}")
+        else:
+            if "--env CLICKHOUSE_SKIP_USER_SETUP=1" not in workflow_content:
+                violations.append(
+                    "publish workflow must smoke-test with CLICKHOUSE_SKIP_USER_SETUP=1"
+                )
+
+        passed = not violations
+        self.findings.append({
+            "rule": "RULE-08: ClickHouse Docker User Provisioning",
+            "passed": passed,
+            "details": (
+                "Custom users.xml exclusively provisions admin/service users."
+                if passed
+                else f"Conflicting Docker user provisioning: {violations}"
+            )
+        })
+        return passed
+
     def run_all(self) -> bool:
         print("=" * 68)
         print(" ENTERPRISE POLICY-AS-CODE COMPLIANCE LINTER (AGENTS.MD)")
@@ -266,8 +333,9 @@ class PolicyLinter:
         r5 = self.check_rule_05_rbac_and_quotas()
         r6 = self.check_rule_06_clickhouse_env_substitutions()
         r7 = self.check_rule_07_clickhouse_logging_config()
+        r8 = self.check_rule_08_clickhouse_docker_user_setup()
 
-        all_passed = all([r1, r2, r3, r4, r5, r6, r7])
+        all_passed = all([r1, r2, r3, r4, r5, r6, r7, r8])
 
         for f in self.findings:
             mark = "[PASS]" if f["passed"] else "[FAIL]"

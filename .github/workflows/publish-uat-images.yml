@@ -137,6 +137,7 @@ jobs:
                 --env CLICKHOUSE_USER=admin
                 --env CLICKHOUSE_PASSWORD=validation-admin-password
                 --env CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+                --env CLICKHOUSE_SKIP_USER_SETUP=1
                 --env CLICKHOUSE_ADMIN_PASSWORD=validation-admin-password
                 --env CLICKHOUSE_ETL_PASSWORD=validation-etl-password
                 --env CLICKHOUSE_BI_PASSWORD=validation-bi-password

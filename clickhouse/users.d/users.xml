@@ -1,5 +1,8 @@
 <clickhouse>
     <users>
+        <!-- This file owns user provisioning; remove the image default user. -->
+        <default remove="remove"/>
+
         <!-- Default admin user with credentials injected via environment variables -->
         <admin>
             <password from_env="CLICKHOUSE_ADMIN_PASSWORD"/>
