@@ -134,7 +134,15 @@ jobs:
           case "${{ matrix.image }}" in
             clickhouse-uat)
               clickhouse_validation_env=(
-                --env CLICKHOUSE_S3_ENDPOINT=http://minio:9000/validation/clickhouse_data/
+                --env CLICKHOUSE_USER=admin
+                --env CLICKHOUSE_PASSWORD=validation-admin-password
+                --env CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+                --env CLICKHOUSE_ADMIN_PASSWORD=validation-admin-password
+                --env CLICKHOUSE_ETL_PASSWORD=validation-etl-password
+                --env CLICKHOUSE_BI_PASSWORD=validation-bi-password
+                --env CLICKHOUSE_API_PASSWORD=validation-api-password
+                --env CLICKHOUSE_MONITORING_PASSWORD=validation-monitoring-password
+                --env CLICKHOUSE_S3_ENDPOINT=http://127.0.0.1:19090/validation/clickhouse_data/
                 --env CLICKHOUSE_S3_ACCESS_KEY=validation-access-key
                 --env CLICKHOUSE_S3_SECRET_KEY=validation-secret-key
                 --env S3_REGION=us-east-1
@@ -153,7 +161,59 @@ jobs:
                 extract-from-config \
                 --config-file=/etc/clickhouse-server/config.xml \
                 --key=storage_configuration.disks.s3_cold.endpoint |
-                grep -Fx 'http://minio:9000/validation/clickhouse_data/'
+                grep -Fx 'http://127.0.0.1:19090/validation/clickhouse_data/'
+
+              smoke_container="clickhouse-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              cleanup_clickhouse_smoke() {
+                docker rm -f "${smoke_container}" >/dev/null 2>&1 || true
+              }
+              trap cleanup_clickhouse_smoke EXIT
+
+              docker run --detach \
+                --name "${smoke_container}" \
+                --ulimit nofile=262144:262144 \
+                "${clickhouse_validation_env[@]}" \
+                "${image_ref}"
+
+              clickhouse_ready=false
+              for _ in $(seq 1 90); do
+                pid1_command="$(docker exec "${smoke_container}" sh -c \
+                  'tr "\000" " " < /proc/1/cmdline' 2>/dev/null || true)"
+
+                # During initdb the entrypoint starts a loopback-only temporary
+                # server. Do not accept that process as a successful smoke test;
+                # PID 1 must have exec'd the final clickhouse-server first.
+                if [[ "${pid1_command}" == *clickhouse-server* ]] && \
+                  docker exec "${smoke_container}" \
+                  clickhouse-client \
+                    --host 127.0.0.1 \
+                    --user admin \
+                    --password validation-admin-password \
+                    --query 'SELECT 1' >/dev/null 2>&1; then
+                  clickhouse_ready=true
+                  break
+                fi
+
+                if [[ "$(docker inspect --format '{{.State.Running}}' "${smoke_container}")" != "true" ]]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              if [[ "${clickhouse_ready}" != "true" ]]; then
+                echo 'ClickHouse did not become ready; startup logs follow.' >&2
+                docker logs "${smoke_container}" >&2 || true
+                exit 1
+              fi
+
+              docker exec "${smoke_container}" \
+                clickhouse-client \
+                  --host 127.0.0.1 \
+                  --user admin \
+                  --password validation-admin-password \
+                  --query 'SELECT currentUser(), version()'
+              cleanup_clickhouse_smoke
+              trap - EXIT
               ;;
             serving-api-uat)
               docker run --rm \

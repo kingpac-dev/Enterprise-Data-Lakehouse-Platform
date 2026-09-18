@@ -91,7 +91,11 @@ services:
       - clickhouse_node2_logs:/var/log/clickhouse-server
       - ../clickhouse/config.d:/etc/clickhouse-server/config.d:ro
       - ../clickhouse/users.d:/etc/clickhouse-server/users.d:ro
-      - ../sql/init:/docker-entrypoint-initdb.d:ro
+      - ../sql/init/01_databases.sql:/docker-entrypoint-initdb.d/01_databases.sql:ro
+      - ../sql/init/02_medallion_tables.sql:/docker-entrypoint-initdb.d/02_medallion_tables.sql:ro
+      - ../sql/init/03_materialized_views.sql:/docker-entrypoint-initdb.d/03_materialized_views.sql:ro
+      - ../sql/init/04_rbac_and_row_policies.sql:/docker-entrypoint-initdb.d/04_rbac_and_row_policies.sql:ro
+      - ../sql/init/05_kafka_streaming.sql:/docker-entrypoint-initdb.d/05_kafka_streaming.sql:ro
     ulimits:
       nofile:
         soft: 262144

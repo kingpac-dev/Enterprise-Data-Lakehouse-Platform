@@ -156,6 +156,8 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_ADMIN_USER:-admin}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-change_this_admin_password_in_prod}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: ${CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT:-1}
+      # Set to 1 only for an approved recovery of a partially initialized UAT volume.
+      CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS: ${CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS:-}
       CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:-change_this_admin_password_in_prod}
       CLICKHOUSE_ETL_PASSWORD: ${CLICKHOUSE_ETL_PASSWORD:-change_this_etl_password_in_prod}
       CLICKHOUSE_BI_PASSWORD: ${CLICKHOUSE_BI_PASSWORD:-change_this_bi_password_in_prod}
@@ -186,10 +188,17 @@ services:
       - data_storage
       - observability
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8123/ping || exit 1"]
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client --host 127.0.0.1
+          --user "$${CLICKHOUSE_USER}"
+          --password "$${CLICKHOUSE_PASSWORD}"
+          --query "SELECT 1" >/dev/null
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
 
   # ----------------------------------------------------------------------------

@@ -1,11 +1,17 @@
 <clickhouse>
     <logger>
         <level>information</level>
+        <startup_level>information</startup_level>
         <log>/var/log/clickhouse-server/clickhouse-server.log</log>
         <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
         <size>500M</size>
         <count>5</count>
-        <formatting>json</formatting>
+        <!-- Keep startup/fatal messages visible in Portainer container logs. -->
+        <console>1</console>
+        <console_log_level>information</console_log_level>
+        <formatting>
+            <type>json</type>
+        </formatting>
     </logger>
 
     <!-- Query Log Retention: keep query log for 30 days to assist auditability and SRE analysis -->
@@ -13,7 +19,8 @@
         <database>system</database>
         <table>query_log</table>
         <partition_by>toYYYYMM(event_date)</partition_by>
+        <order_by>(event_date, event_time)</order_by>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl>
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
-        <engine>ENGINE = MergeTree PARTITION BY toYYYYMM(event_date) ORDER BY (event_date, event_time) TTL event_date + INTERVAL 30 DAY DELETE</engine>
     </query_log>
 </clickhouse>
