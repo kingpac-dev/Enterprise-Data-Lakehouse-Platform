@@ -262,7 +262,8 @@ Compose path: compose/docker-compose.dev.yml
 และมีสิทธิ์อ่าน repository; หาก repository เป็น private ต้องมี `repo` ด้วย ห้ามใส่ PAT
 ใน Environment variables ของ Stack หรือ commit ลง Git
 
-เพิ่ม Environment variables:
+เพิ่ม Environment variables ด้านล่างหลังจาก workflow publish release `uat-v1.0.4`
+สำเร็จครบทุก image แล้ว:
 
 ```dotenv
 ENVIRONMENT=uat
@@ -271,10 +272,12 @@ OBSERVABILITY_NETWORK=lakehouse-uat-observability
 CLICKHOUSE_PORT_HTTP=18123
 CLICKHOUSE_PORT_NATIVE=19000
 CLICKHOUSE_PORT_PROMETHEUS=19363
-CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:<RELEASE_TAG>
-DBT_RUNNER_UAT_IMAGE=ghcr.io/kingpac-dev/dbt-runner-uat:<RELEASE_TAG>
+CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.4
+DBT_RUNNER_UAT_IMAGE=ghcr.io/kingpac-dev/dbt-runner-uat:uat-v1.0.4
 CLICKHOUSE_ADMIN_USER=admin
 CLICKHOUSE_ADMIN_PASSWORD=<STRONG_SECRET>
+CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS=
 CLICKHOUSE_ETL_PASSWORD=<STRONG_SECRET>
 CLICKHOUSE_BI_PASSWORD=<STRONG_SECRET>
 CLICKHOUSE_API_PASSWORD=<STRONG_SECRET>
@@ -292,10 +295,12 @@ CLICKHOUSE_CPU_LIMIT=4
 CLICKHOUSE_MEMORY_LIMIT=8G
 CLICKHOUSE_MEMORY_RESERVATION=4G
 SERVING_API_PORT=18000
-SERVING_API_UAT_IMAGE=ghcr.io/kingpac-dev/serving-api-uat:<RELEASE_TAG>
+SERVING_API_UAT_IMAGE=ghcr.io/kingpac-dev/serving-api-uat:uat-v1.0.4
 ```
 
 แทนค่าทุก placeholder ด้วยค่าจริงก่อน Deploy
+โดยค่าปกติของ `CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS` ต้องเว้นว่าง ใส่ `1` ชั่วคราวเฉพาะ
+recovery bootstrap ตามหัวข้อแก้ไข ClickHouse ด้านล่างเท่านั้น
 ห้ามคัดลอกเครื่องหมาย `<` และ `>` ไปใช้เป็นส่วนหนึ่งของรหัสผ่าน
 
 ### Credential ของ MinIO Console
@@ -357,26 +362,34 @@ Environment variables เท่านั้น วิธีนี้ใช้ก
 ไม่ copy Production HA cluster/Keeper config เข้า Single Node อีก ขั้นตอนนำขึ้นใช้:
 
 1. Commit/push การแก้ไขผ่าน review และ merge เข้า branch ที่อนุมัติแล้ว
-2. วิธีที่แนะนำคือสร้าง Git tag ใหม่จาก commit ที่อนุมัติแล้ว เช่น `uat-v1.0.3` แล้ว push tag
+2. วิธีที่แนะนำคือสร้าง Git tag ใหม่จาก commit ที่อนุมัติแล้ว เช่น `uat-v1.0.4` แล้ว push tag
    เพื่อให้ workflow checkout source ตรงกับ release เสมอ:
 
    ```bash
    git checkout main
    git pull --ff-only
-   git tag -a uat-v1.0.3 -m "UAT release uat-v1.0.3"
-   git push origin uat-v1.0.3
+   git tag -a uat-v1.0.4 -m "UAT release uat-v1.0.4"
+   git push origin uat-v1.0.4
    ```
 
    หากใช้ **Run workflow** แบบ manual ต้องเลือก **Use workflow from** เป็น default branch
    ที่ merge การแก้ไขนี้แล้วก่อนกรอก `release_tag` ใหม่ ตัว workflow จะปฏิเสธ branch อื่น
-   ห้ามรันจาก `main` รุ่นเก่า และห้ามใช้ `uat-v1.0.0` ถึง `uat-v1.0.2` ซ้ำ
+   ห้ามรันจาก `main` รุ่นเก่า และห้ามใช้ `uat-v1.0.0` ถึง `uat-v1.0.3` ซ้ำ
 3. รอให้ GitHub Actions **Publish UAT Images to GHCR** ผ่านครบทุก image โดย ClickHouse
-   smoke test ต้องแสดง HTTP port และไม่มี Code 1000 จาก `<shard>` หรือ `<endpoint>`
+   smoke test ต้องสตาร์ต ClickHouse จริงและ `SELECT 1` ด้วยผู้ใช้ `admin` ผ่าน
 4. เปลี่ยน Core Stack variable:
 
 ```dotenv
-CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.3
+CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.4
 ```
+
+เฉพาะกรณีกู้คืน volume ที่เริ่ม bootstrap ค้างจาก image รุ่นก่อน ให้เพิ่มชั่วคราว:
+
+```dotenv
+CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS=1
+```
+
+SQL ชุด `01`-`05` ถูกออกแบบให้รันซ้ำได้ แต่ห้ามใช้ค่านี้กับ Production โดยไม่มี human approval
 
 5. กด **Pull and redeploy** โดยไม่ลบ volumes แล้วตรวจ:
 
@@ -389,6 +402,14 @@ curl -fsS http://127.0.0.1:18123/ping
 
 ผลที่ต้องการคือ image tag ใหม่, restart count ไม่เพิ่มต่อเนื่อง, ไม่มี Code 1000 และ `/ping`
 ตอบ `Ok.` ห้าม reuse/overwrite tag เดิม เพราะ Docker endpoint อาจใช้ cached image เก่า
+เมื่อยืนยันว่า database `raw`, `core`, `mart`, `serving` และ RBAC ถูกสร้างครบแล้ว ให้ลบค่า
+`CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS` หรือกำหนดเป็นค่าว่าง จากนั้น Pull and redeploy อีกครั้ง
+
+หาก container ค้างที่ `Processing configuration file` และ Portainer แสดง `unhealthy` ให้ตรวจ
+`docker logs` ก่อนลบ volume เสมอ ตั้งแต่ `uat-v1.0.4` เป็นต้นไป startup/fatal log จะถูกส่งออก
+console ของ container และ external S3/Iceberg template จะไม่ถูกรันระหว่าง bootstrap อัตโนมัติ
+พอร์ต `19000` เป็น ClickHouse native protocol จึงเปิดด้วย browser ไม่ได้ ส่วน Prometheus ต้องตรวจที่
+`http://<UAT_HOST>:19363/metrics` ไม่ใช่ path `/`
 
 ถ้าต้องการ Serving API ตั้งแต่แรก ให้เพิ่ม `COMPOSE_PROFILES=api` จากนั้นกด
 **Deploy the stack** และตรวจว่า MinIO/ClickHouse เป็น `healthy`, `minio-init`
@@ -469,14 +490,14 @@ SOURCE_MSSQL_SA_PASSWORD=<STRONG_SA_SECRET>
 SOURCE_MSSQL_DB=source_uat
 SOURCE_MSSQL_USER=source_app
 SOURCE_MSSQL_PASSWORD=<STRONG_APP_SECRET>
-SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:<RELEASE_TAG>
+SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.4
 SOURCE_MONGODB_PORT=17017
 SOURCE_MONGODB_DB=source_uat
 SOURCE_MONGODB_ROOT_USER=mongo_admin
 SOURCE_MONGODB_ROOT_PASSWORD=<STRONG_ROOT_SECRET>
 SOURCE_MONGODB_USER=source_app
 SOURCE_MONGODB_PASSWORD=<STRONG_APP_SECRET>
-SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:<RELEASE_TAG>
+SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.4
 ```
 
 กด **Deploy the stack** แล้วตรวจ PostgreSQL, MySQL, SQL Server และ MongoDB เป็น
@@ -489,11 +510,11 @@ sudo docker inspect --format '{{.Name}} -> {{.Config.Image}}' \
   lakehouse-source-mssql-init lakehouse-source-mongodb
 ```
 
-ค่าที่ถูกต้องสำหรับตัวอย่าง release `uat-v1.0.3` คือ:
+ค่าที่ถูกต้องสำหรับตัวอย่าง release `uat-v1.0.4` คือ:
 
 ```text
-lakehouse-source-mssql-init -> ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.3
-lakehouse-source-mongodb -> ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.3
+lakehouse-source-mssql-init -> ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.4
+lakehouse-source-mongodb -> ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.4
 ```
 
 หากสอง container นี้แสดง `serving-api-uat` หรือ log มี `uvicorn`/
@@ -501,8 +522,8 @@ lakehouse-source-mongodb -> ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.3
 ผิด image ให้แก้เป็น:
 
 ```dotenv
-SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:<RELEASE_TAG>
-SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:<RELEASE_TAG>
+SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.4
+SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.4
 ```
 
 แล้วกด **Pull and redeploy** Data Sources Stack โดยไม่ลบ database volumes
@@ -566,9 +587,9 @@ Compose path: compose/docker-compose.observability.yml
 
 ```dotenv
 OBSERVABILITY_NETWORK=lakehouse-uat-observability
-PROMETHEUS_UAT_IMAGE=ghcr.io/kingpac-dev/prometheus-uat:<RELEASE_TAG>
-GRAFANA_UAT_IMAGE=ghcr.io/kingpac-dev/grafana-uat:<RELEASE_TAG>
-LOKI_UAT_IMAGE=ghcr.io/kingpac-dev/loki-uat:<RELEASE_TAG>
+PROMETHEUS_UAT_IMAGE=ghcr.io/kingpac-dev/prometheus-uat:uat-v1.0.4
+GRAFANA_UAT_IMAGE=ghcr.io/kingpac-dev/grafana-uat:uat-v1.0.4
+LOKI_UAT_IMAGE=ghcr.io/kingpac-dev/loki-uat:uat-v1.0.4
 PROMETHEUS_PORT=19093
 GRAFANA_PORT=13000
 LOKI_PORT=13100

@@ -3,6 +3,11 @@
 -- =============================================================================
 -- Enables zero-ETL querying directly over external Parquet data lakes and
 -- Apache Iceberg table formats stored in S3/MinIO object storage.
+--
+-- IMPORTANT: This is an optional, parameterized migration. It is deliberately
+-- excluded from /docker-entrypoint-initdb.d so missing external datasets cannot
+-- prevent ClickHouse from starting. Supply s3_endpoint, s3_access_key, and
+-- s3_secret_key as clickhouse-client query parameters when applying it.
 -- =============================================================================
 
 -- 1. External Parquet Table over Raw Landing Bucket
@@ -30,9 +35,9 @@ CREATE TABLE IF NOT EXISTS raw.ext_s3_orders_landing
     _is_deleted UInt8
 )
 ENGINE = S3(
-    'http://minio:9000/lakehouse-landing/landing/*/*/*.parquet',
-    'minio_admin',
-    'minio_secure_password',
+    concat({s3_endpoint:String}, '/landing/*/*/*.parquet'),
+    {s3_access_key:String},
+    {s3_secret_key:String},
     'Parquet'
 );
 
@@ -54,9 +59,9 @@ CREATE TABLE IF NOT EXISTS mart.ext_s3_sales_archive
     _ingested_at DateTime64(3)
 )
 ENGINE = S3(
-    'http://minio:9000/lakehouse-landing/archive/sales/*/*.parquet',
-    'minio_admin',
-    'minio_secure_password',
+    concat({s3_endpoint:String}, '/archive/sales/*/*.parquet'),
+    {s3_access_key:String},
+    {s3_secret_key:String},
     'Parquet'
 );
 
@@ -74,7 +79,7 @@ CREATE TABLE IF NOT EXISTS raw.ext_iceberg_orders
     status String
 )
 ENGINE = Iceberg(
-    'http://minio:9000/lakehouse-landing/iceberg/warehouse/orders',
-    'minio_admin',
-    'minio_secure_password'
+    concat({s3_endpoint:String}, '/iceberg/warehouse/orders'),
+    {s3_access_key:String},
+    {s3_secret_key:String}
 );

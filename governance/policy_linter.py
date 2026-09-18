@@ -13,6 +13,7 @@ Mandatory Policy Rules:
 [RULE-04] Hot/Cold Tiering Storage Policy in ClickHouse configuration
 [RULE-05] Least-Privilege Role & Memory Quota Configuration
 [RULE-06] ClickHouse from_env substitutions require external values (no inline fallback)
+[RULE-07] ClickHouse logger and system-log configuration is structurally valid
 """
 
 import os
@@ -210,6 +211,47 @@ class PolicyLinter:
         })
         return passed
 
+    def check_rule_07_clickhouse_logging_config(self) -> bool:
+        """RULE-07: Rejects logger structures known to fail ClickHouse startup."""
+        config_path = os.path.join(self.root_dir, "clickhouse/config.d/logging.xml")
+        violations = []
+
+        try:
+            root = ET.parse(config_path).getroot()
+        except (OSError, ET.ParseError) as exc:
+            violations.append(f"XML parse error: {exc}")
+        else:
+            formatting = root.find("./logger/formatting")
+            if formatting is not None:
+                formatting_type = formatting.find("type")
+                if formatting_type is None or not (formatting_type.text or "").strip():
+                    violations.append("logger.formatting requires a nested <type> value")
+
+            for system_log in root.findall("./query_log"):
+                if system_log.find("engine") is not None:
+                    conflicting = [
+                        name
+                        for name in ("partition_by", "order_by", "ttl")
+                        if system_log.find(name) is not None
+                    ]
+                    if conflicting:
+                        violations.append(
+                            "query_log.engine cannot be combined with "
+                            + ", ".join(conflicting)
+                        )
+
+        passed = not violations
+        self.findings.append({
+            "rule": "RULE-07: ClickHouse Logging Configuration",
+            "passed": passed,
+            "details": (
+                "Logger formatting and query_log table settings are structurally valid."
+                if passed
+                else f"Invalid logging configuration: {violations}"
+            )
+        })
+        return passed
+
     def run_all(self) -> bool:
         print("=" * 68)
         print(" ENTERPRISE POLICY-AS-CODE COMPLIANCE LINTER (AGENTS.MD)")
@@ -223,8 +265,9 @@ class PolicyLinter:
         r4 = self.check_rule_04_storage_tiering()
         r5 = self.check_rule_05_rbac_and_quotas()
         r6 = self.check_rule_06_clickhouse_env_substitutions()
+        r7 = self.check_rule_07_clickhouse_logging_config()
 
-        all_passed = all([r1, r2, r3, r4, r5, r6])
+        all_passed = all([r1, r2, r3, r4, r5, r6, r7])
 
         for f in self.findings:
             mark = "[PASS]" if f["passed"] else "[FAIL]"

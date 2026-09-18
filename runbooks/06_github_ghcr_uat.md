@@ -35,7 +35,7 @@ Workflow `.github/workflows/publish-uat-images.yml` ใช้ `GITHUB_TOKEN` ท
 2. ไปที่ **GitHub > Actions > Publish UAT Images to GHCR**
 3. วิธีที่แนะนำ: สร้าง Git tag ใหม่รูปแบบ `uat-v*` จาก commit ที่อนุมัติแล้วและ push tag
 4. ทางเลือก: เลือก **Run workflow** จาก default branch เท่านั้น และระบุ image tag ใหม่
-   เช่น `uat-v1.0.3` ห้าม reuse tag ที่มีอยู่ใน GHCR
+   เช่น `uat-v1.0.4` ห้าม reuse tag ที่มีอยู่ใน GHCR
 5. รอให้ทั้ง 8 matrix jobs สำเร็จ และตรวจ package manifests/digests ใน GitHub Packages
 
 Workflow จะตรวจว่า tag ยังไม่มีอยู่, build image candidate, ทำ smoke test แล้วจึง push เข้า GHCR

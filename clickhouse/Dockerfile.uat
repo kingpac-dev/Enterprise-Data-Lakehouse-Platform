@@ -7,4 +7,12 @@ COPY clickhouse/config.d/network.xml /etc/clickhouse-server/config.d/network.xml
 COPY clickhouse/config.d/prometheus.xml /etc/clickhouse-server/config.d/prometheus.xml
 COPY clickhouse/config.d/storage_configuration.xml /etc/clickhouse-server/config.d/storage_configuration.xml
 COPY clickhouse/users.d/ /etc/clickhouse-server/users.d/
-COPY sql/init/ /docker-entrypoint-initdb.d/
+
+# Bootstrap only deterministic local objects. The external S3/Iceberg DDL is a
+# separately parameterized operation and must not block the ClickHouse server
+# from becoming ready when an external dataset/catalog is not provisioned yet.
+COPY sql/init/01_databases.sql /docker-entrypoint-initdb.d/01_databases.sql
+COPY sql/init/02_medallion_tables.sql /docker-entrypoint-initdb.d/02_medallion_tables.sql
+COPY sql/init/03_materialized_views.sql /docker-entrypoint-initdb.d/03_materialized_views.sql
+COPY sql/init/04_rbac_and_row_policies.sql /docker-entrypoint-initdb.d/04_rbac_and_row_policies.sql
+COPY sql/init/05_kafka_streaming.sql /docker-entrypoint-initdb.d/05_kafka_streaming.sql
