@@ -12,6 +12,7 @@ Mandatory Policy Rules:
 [RULE-03] Low-Cardinality Partitioning (toYYYYMM on analytical fact tables)
 [RULE-04] Hot/Cold Tiering Storage Policy in ClickHouse configuration
 [RULE-05] Least-Privilege Role & Memory Quota Configuration
+[RULE-06] Valid ClickHouse from_env fallback substitutions
 """
 
 import os
@@ -175,6 +176,40 @@ class PolicyLinter:
         })
         return passed
 
+    def check_rule_06_clickhouse_env_substitutions(self) -> bool:
+        """RULE-06: Requires replace=1 when from_env has a fallback text value."""
+        violations = []
+        pattern = os.path.join(self.root_dir, "clickhouse", "**", "*.xml")
+
+        for config_path in glob.glob(pattern, recursive=True):
+            try:
+                root = ET.parse(config_path).getroot()
+            except ET.ParseError as exc:
+                rel_path = os.path.relpath(config_path, self.root_dir)
+                violations.append(f"{rel_path}: XML parse error: {exc}")
+                continue
+
+            for element in root.iter():
+                if "from_env" not in element.attrib:
+                    continue
+                if not (element.text or "").strip():
+                    continue
+                if element.attrib.get("replace", "").lower() not in {"1", "true"}:
+                    rel_path = os.path.relpath(config_path, self.root_dir)
+                    violations.append(f"{rel_path}: <{element.tag}>")
+
+        passed = not violations
+        self.findings.append({
+            "rule": "RULE-06: ClickHouse Environment Substitution",
+            "passed": passed,
+            "details": (
+                "All from_env elements with fallback values declare replace=1."
+                if passed
+                else f"Invalid from_env fallback elements: {violations}"
+            )
+        })
+        return passed
+
     def run_all(self) -> bool:
         print("=" * 68)
         print(" ENTERPRISE POLICY-AS-CODE COMPLIANCE LINTER (AGENTS.MD)")
@@ -187,8 +222,9 @@ class PolicyLinter:
         r3 = self.check_rule_03_partitioning()
         r4 = self.check_rule_04_storage_tiering()
         r5 = self.check_rule_05_rbac_and_quotas()
+        r6 = self.check_rule_06_clickhouse_env_substitutions()
 
-        all_passed = all([r1, r2, r3, r4, r5])
+        all_passed = all([r1, r2, r3, r4, r5, r6])
 
         for f in self.findings:
             mark = "[PASS]" if f["passed"] else "[FAIL]"

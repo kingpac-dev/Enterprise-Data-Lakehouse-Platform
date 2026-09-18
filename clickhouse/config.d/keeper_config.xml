@@ -5,7 +5,7 @@
     -->
     <keeper_server>
         <tcp_port>9181</tcp_port>
-        <server_id from_env="KEEPER_SERVER_ID">1</server_id>
+        <server_id from_env="KEEPER_SERVER_ID" replace="1">1</server_id>
         <log_storage_path>/var/lib/clickhouse-keeper/coordination/log</log_storage_path>
         <snapshot_storage_path>/var/lib/clickhouse-keeper/coordination/snapshots</snapshot_storage_path>
 

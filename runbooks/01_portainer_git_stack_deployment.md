@@ -208,9 +208,41 @@ sudo docker network inspect lakehouse-uat-observability >/dev/null
 กับ environment variables และต้องอยู่บน endpoint เดียวกัน การสร้าง network บน Portainer
 Server คนละเครื่องจะไม่ทำให้ network ปรากฏบน UAT endpoint
 
+Network ที่คาดว่าจะเห็นหลัง deploy ครบทุก Stack มีดังนี้:
+
+| Network | Ownership | หน้าที่ |
+|---|---|---|
+| `lakehouse-uat-integration` | External/shared | Core, Data Sources และ Streaming สื่อสารกัน |
+| `lakehouse-uat-observability` | External/shared | Prometheus เข้าถึง metrics ของ Core |
+| `lakehouse-uat-core_data_storage` | Core Stack/private | ClickHouse ติดต่อ MinIO ภายใน Core |
+
+`lakehouse-uat-core_data_storage` ไม่ใช่ network ซ้ำ แต่เป็น private storage boundary
+ส่วน `lakehouse-uat-core_management` และ `lakehouse-uat-observability_management`
+ไม่จำเป็นใน UAT Compose รุ่นปัจจุบันและถูกนำออกแล้ว
+
 หากพบ `network ... declared as external, but could not be found` ให้สร้าง network ที่ขาด
 บน endpoint นี้ก่อนแล้วกด Deploy/Update Stack อีกครั้ง ไม่ต้องแก้ `external: true` เป็น false
 เพราะ network ทั้งสองเป็นขอบเขตร่วมระหว่างหลาย stacks
+
+หากเคย deploy release เก่าที่สร้าง `*_management` ให้ Update Core และ Observability Stack
+เป็น release ปัจจุบันก่อน แล้วตรวจว่าไม่มี container เกาะ network เดิม:
+
+```bash
+sudo docker network inspect lakehouse-uat-core_management \
+  --format '{{len .Containers}}' 2>/dev/null || true
+sudo docker network inspect lakehouse-uat-observability_management \
+  --format '{{len .Containers}}' 2>/dev/null || true
+```
+
+ลบเฉพาะ network ที่แสดง `0` เท่านั้น หาก Portainer/Compose ยังไม่ได้ลบให้อัตโนมัติ:
+
+```bash
+sudo docker network rm lakehouse-uat-core_management
+sudo docker network rm lakehouse-uat-observability_management
+```
+
+ห้ามลบ `lakehouse-uat-integration`, `lakehouse-uat-observability` หรือ
+`lakehouse-uat-core_data_storage` และห้ามใช้ `docker network prune` บน UAT host
 
 ## 6. Deploy Stack 1: UAT Core
 
@@ -252,9 +284,10 @@ MINIO_CONSOLE_PORT=19091
 MINIO_IMAGE=quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1
 MINIO_MC_IMAGE=quay.io/minio/mc:RELEASE.2024-08-13T05-33-17Z@sha256:07c08763869bb18306d6f33a7e887c42211b1585a63c9098c9cf28b1b45b19aa
 S3_BUCKET_LAKE=enterprise-data-lake-uat
-S3_ACCESS_KEY=<STRONG_ACCESS_KEY>
-S3_SECRET_KEY=<STRONG_SECRET>
+S3_ACCESS_KEY=<MINIO_ROOT_USERNAME>
+S3_SECRET_KEY=<STRONG_UNIQUE_MINIO_ROOT_SECRET>
 S3_REGION=us-east-1
+CLICKHOUSE_S3_ENDPOINT=http://minio:9000/enterprise-data-lake-uat/clickhouse_data/
 CLICKHOUSE_CPU_LIMIT=4
 CLICKHOUSE_MEMORY_LIMIT=8G
 CLICKHOUSE_MEMORY_RESERVATION=4G
@@ -262,8 +295,83 @@ SERVING_API_PORT=18000
 SERVING_API_UAT_IMAGE=ghcr.io/kingpac-dev/serving-api-uat:<RELEASE_TAG>
 ```
 
-แทนค่าทุก `<STRONG_SECRET>` และ `<STRONG_ACCESS_KEY>` ด้วยค่าจริงก่อน Deploy
+แทนค่าทุก placeholder ด้วยค่าจริงก่อน Deploy
 ห้ามคัดลอกเครื่องหมาย `<` และ `>` ไปใช้เป็นส่วนหนึ่งของรหัสผ่าน
+
+### Credential ของ MinIO Console
+
+UAT Compose รุ่นปัจจุบัน map ค่า `S3_ACCESS_KEY` ไปเป็น `MINIO_ROOT_USER` และ
+`S3_SECRET_KEY` ไปเป็น `MINIO_ROOT_PASSWORD` ดังนั้น credential ของหน้า MinIO Console คือ:
+
+| หน้าเว็บ | URL | Username | Password |
+|---|---|---|---|
+| MinIO Console | `http://<UAT_HOST>:19091` | ค่า `S3_ACCESS_KEY` ของ Core Stack | ค่า `S3_SECRET_KEY` ของ Core Stack |
+| Grafana | `http://<UAT_HOST>:13000` | ค่า `GRAFANA_ADMIN_USER` ของ Observability Stack | ค่า `GRAFANA_ADMIN_PASSWORD` ของ Observability Stack |
+| Portainer | `https://<UAT_HOST>:9443` | Portainer account | Portainer password |
+
+ห้ามนำ `GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD` ไป login MinIO แม้ username
+จะเป็น `admin` เหมือนกัน เพราะเป็นคนละ container และคนละ credential store
+
+หาก MinIO แสดง `Invalid Login`:
+
+1. ไปที่ **Stacks > lakehouse-uat-core > Editor/Environment variables** แล้วตรวจ
+   `S3_ACCESS_KEY` และ rotate `S3_SECRET_KEY` เป็นค่าที่ไม่ซ้ำกับ Grafana/Portainer
+2. กด **Pull and redeploy** เพื่อ recreate Core containers โดยไม่เลือก remove volumes
+3. ตรวจ username ที่ container ได้รับจริง โดยคำสั่งนี้ไม่แสดง password:
+
+```bash
+sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  lakehouse-minio | sed -n 's/^MINIO_ROOT_USER=//p'
+
+sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  lakehouse-minio | grep -q '^MINIO_ROOT_PASSWORD=..*$' && \
+  echo 'MINIO_ROOT_PASSWORD is set'
+
+sudo docker inspect --format '{{.Created}}' lakehouse-minio
+sudo docker logs --tail 100 lakehouse-minio
+curl -fsS http://127.0.0.1:19090/minio/health/ready
+```
+
+4. เปิดหน้าต่าง browser แบบ private/incognito แล้ว login ด้วยค่าจาก Core Stack
+
+การเปลี่ยน `S3_ACCESS_KEY`/`S3_SECRET_KEY` จะเปลี่ยน credential ที่ ClickHouse ใช้เข้าถึง
+MinIO ด้วย จึงต้อง redeploy Core Stack ทั้งชุดและตรวจ ClickHouse health หลังการ rotate
+
+### ClickHouse Code 1000: `from_env` ไม่มี `replace`
+
+หาก log แสดงข้อความลักษณะนี้:
+
+```text
+Element <shard> has value and does not have 'replace' attribute,
+can't process from_env substitution
+```
+
+แสดงว่า `clickhouse-uat` image ถูก build จาก XML รุ่นเก่าที่กำหนดทั้ง `from_env` และค่า
+fallback แต่ไม่มี `replace="1"` การแก้เฉพาะ Environment variables ใน Portainer ไม่เพียงพอ
+เพราะ XML ถูก bake อยู่ใน image
+
+release ที่แก้แล้วเพิ่ม `replace="1"` ให้ทุก element ที่มี fallback และ UAT Dockerfile
+ไม่ copy Production HA cluster/Keeper config เข้า Single Node อีก ขั้นตอนนำขึ้นใช้:
+
+1. Commit/push การแก้ไขผ่าน review
+2. รัน GitHub Actions **Publish UAT Images to GHCR** ด้วย release tag ใหม่ เช่น `uat-v1.0.1`
+3. เปลี่ยน Core Stack variable:
+
+```dotenv
+CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.1
+```
+
+4. กด **Pull and redeploy** โดยไม่ลบ volumes แล้วตรวจ:
+
+```bash
+sudo docker inspect --format '{{.Config.Image}} restart={{.RestartCount}} status={{.State.Status}}' \
+  lakehouse-clickhouse-dev
+sudo docker logs --tail 200 lakehouse-clickhouse-dev
+curl -fsS http://127.0.0.1:18123/ping
+```
+
+ผลที่ต้องการคือ image tag ใหม่, restart count ไม่เพิ่มต่อเนื่อง, ไม่มี Code 1000 และ `/ping`
+ตอบ `Ok.` ห้าม reuse/overwrite tag เดิม เพราะ Docker endpoint อาจใช้ cached image เก่า
 
 ถ้าต้องการ Serving API ตั้งแต่แรก ให้เพิ่ม `COMPOSE_PROFILES=api` จากนั้นกด
 **Deploy the stack** และตรวจว่า MinIO/ClickHouse เป็น `healthy`, `minio-init`
@@ -356,6 +464,31 @@ SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:<RELEASE_TAG>
 
 กด **Deploy the stack** แล้วตรวจ PostgreSQL, MySQL, SQL Server และ MongoDB เป็น
 `healthy`; `source-mssql-init` ต้องจบด้วย exit code `0`
+
+ตรวจ image mapping หลัง deploy ทุกครั้ง:
+
+```bash
+sudo docker inspect --format '{{.Name}} -> {{.Config.Image}}' \
+  lakehouse-source-mssql-init lakehouse-source-mongodb
+```
+
+ค่าที่ถูกต้องสำหรับตัวอย่าง release `uat-v1.0.1` คือ:
+
+```text
+lakehouse-source-mssql-init -> ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.1
+lakehouse-source-mongodb -> ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.1
+```
+
+หากสอง container นี้แสดง `serving-api-uat` หรือ log มี `uvicorn`/
+`ModuleNotFoundError: No module named 'data_quality'` แสดงว่ากำหนด Portainer variables
+ผิด image ให้แก้เป็น:
+
+```dotenv
+SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:<RELEASE_TAG>
+SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:<RELEASE_TAG>
+```
+
+แล้วกด **Pull and redeploy** Data Sources Stack โดยไม่ลบ database volumes
 
 Internal endpoints สำหรับ ingestion:
 
@@ -450,6 +583,9 @@ sudo docker image inspect \
 
 Deploy แล้วตรวจ Prometheus, Grafana และ Loki เป็น `running` จากนั้นเปิด Prometheus
 **Status > Targets** และยืนยันว่า `clickhouse:9363` กับ `minio:9000` เป็น `UP`
+
+Grafana เปิดที่ `http://<UAT_HOST>:13000`; port `19091` เป็น MinIO Console และไม่รับ
+`GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD`
 
 หากเคยพบ error ลักษณะนี้:
 
@@ -558,14 +694,15 @@ networks ขณะที่ยังมี stack ใดเชื่อมต่�
 - **Scope & Sources Inspected:** UAT Core, Data Sources, Streaming, Observability,
   environment template, GitHub/GHCR image flow, monitoring configuration และ governance policy
 - **Assumptions & Decisions:** Ubuntu 24 LTS, Docker Compose V2, Git-backed Stacks,
-  UAT Single Node และ masked/synthetic data
+  UAT Single Node, shared integration/observability networks, private Core storage network
+  และ masked/synthetic data
 - **Security & Operational Impact:** Secrets และ GitHub PAT อยู่ใน Portainer/secret manager;
-  GHCR ใช้ pull-only permission; external ports จำกัดด้วย firewall/VPN/TLS;
-  application accounts ใช้ least privilege
+  MinIO, Grafana และ Portainer ใช้รหัสผ่านไม่ซ้ำกัน; GHCR ใช้ pull-only permission;
+  external ports จำกัดด้วย firewall/VPN/TLS; application accounts ใช้ least privilege
 - **Validation Commands & Results:** ต้องแนบ output ของ Compose validation, container
-  health, Prometheus targets และ smoke test จาก UAT host ใน change record
-- **Remaining TBDs & Residual Risks:** GitHub service account/PAT expiration, GHCR package
-  visibility/scan gate, DNS/IP, firewall CIDRs, TLS certificates, backup target, retention
-  และ business-approved RPO/RTO
+  image mapping, health, Prometheus targets และ smoke test จาก UAT host ใน change record
+- **Remaining TBDs & Residual Risks:** การยืนยัน/ลบ stale `*_management` networks บน UAT,
+  GitHub service account/PAT expiration, GHCR package visibility/scan gate, DNS/IP,
+  firewall CIDRs, TLS certificates, backup target, retention และ business-approved RPO/RTO
 - **Human Approval Required:** Platform/DevOps, Security/Network, DBA และ Data Owner
   ต้องอนุมัติก่อน UAT sign-off หรือ production promotion

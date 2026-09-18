@@ -1,0 +1,16 @@
+.git
+.github
+.history
+.idea
+.vscode
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.env
+.env.*
+!.env.example
+*.log
+*.png
+*.webp
+*.docx
+*.pdf

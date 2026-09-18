@@ -34,7 +34,7 @@ jobs:
             context: dbt
             dockerfile: dbt/Dockerfile
           - image: serving-api-uat
-            context: api
+            context: .
             dockerfile: api/Dockerfile
           - image: source-mssql-init
             context: datasources
@@ -105,6 +105,35 @@ jobs:
             --tag "${{ steps.release.outputs.image_ref }}" \
             --push \
             "${{ matrix.context }}"
+
+      - name: Smoke-test published image
+        shell: bash
+        run: |
+          image_ref="${{ steps.release.outputs.image_ref }}"
+          docker pull "${image_ref}"
+
+          case "${{ matrix.image }}" in
+            clickhouse-uat)
+              docker run --rm --entrypoint clickhouse "${image_ref}" \
+                extract-from-config \
+                --config-file=/etc/clickhouse-server/config.xml \
+                --key=http_port
+              ;;
+            serving-api-uat)
+              docker run --rm \
+                --entrypoint python \
+                --env CLICKHOUSE_API_PASSWORD=validation-only \
+                "${image_ref}" \
+                -c "import main; from data_quality.reconciliation import DataReconciliationEngine; DataReconciliationEngine()"
+              ;;
+            source-mssql-init)
+              docker run --rm --entrypoint /bin/bash "${image_ref}" \
+                -n /opt/lakehouse/init-mssql-source.sh
+              ;;
+            source-mongodb)
+              docker run --rm --entrypoint mongosh "${image_ref}" --version
+              ;;
+          esac
 
       - name: Verify published manifest
         shell: bash
