@@ -133,10 +133,27 @@ jobs:
 
           case "${{ matrix.image }}" in
             clickhouse-uat)
-              docker run --rm --entrypoint clickhouse "${image_ref}" \
+              clickhouse_validation_env=(
+                --env CLICKHOUSE_S3_ENDPOINT=http://minio:9000/validation/clickhouse_data/
+                --env CLICKHOUSE_S3_ACCESS_KEY=validation-access-key
+                --env CLICKHOUSE_S3_SECRET_KEY=validation-secret-key
+                --env S3_REGION=us-east-1
+              )
+              docker run --rm --entrypoint sh "${image_ref}" -c \
+                'grep -R -n "from_env=" /etc/clickhouse-server/config.d /etc/clickhouse-server/users.d'
+              docker run --rm --entrypoint clickhouse \
+                "${clickhouse_validation_env[@]}" \
+                "${image_ref}" \
                 extract-from-config \
                 --config-file=/etc/clickhouse-server/config.xml \
                 --key=http_port
+              docker run --rm --entrypoint clickhouse \
+                "${clickhouse_validation_env[@]}" \
+                "${image_ref}" \
+                extract-from-config \
+                --config-file=/etc/clickhouse-server/config.xml \
+                --key=storage_configuration.disks.s3_cold.endpoint |
+                grep -Fx 'http://minio:9000/validation/clickhouse_data/'
               ;;
             serving-api-uat)
               docker run --rm \
