@@ -31,11 +31,16 @@ Git tag / Manual approval -> GitHub Actions -> GHCR -> Portainer -> UAT Docker e
 Workflow `.github/workflows/publish-uat-images.yml` ใช้ `GITHUB_TOKEN` ที่ GitHub สร้างให้
 จึงไม่ต้องเพิ่ม PAT สำหรับการ push image ใน repository secrets
 
-1. Merge workflow ผ่าน review ไปยัง approved branch
+1. Merge source และ workflow ผ่าน review ไปยัง default/approved branch
 2. ไปที่ **GitHub > Actions > Publish UAT Images to GHCR**
-3. เลือก **Run workflow** และระบุ tag เช่น `uat-v1.0.0`
-4. หรือสร้างและ push Git tag รูปแบบ `uat-v*` หลังผ่าน approval
+3. วิธีที่แนะนำ: สร้าง Git tag ใหม่รูปแบบ `uat-v*` จาก commit ที่อนุมัติแล้วและ push tag
+4. ทางเลือก: เลือก **Run workflow** จาก default branch เท่านั้น และระบุ image tag ใหม่
+   เช่น `uat-v1.0.1` ห้าม reuse tag ที่มีอยู่ใน GHCR
 5. รอให้ทั้ง 8 matrix jobs สำเร็จ และตรวจ package manifests/digests ใน GitHub Packages
+
+Workflow จะตรวจว่า tag ยังไม่มีอยู่, build image candidate, ทำ smoke test แล้วจึง push เข้า GHCR
+ถ้า ClickHouse XML ไม่ผ่าน ตัว image จะไม่ถูก publish รอบใหม่ ส่วน release ที่เคย publish ไม่ครบ
+หรือ smoke test ไม่ผ่านต้องเปลี่ยนเป็น tag ใหม่ ห้ามเขียนทับ tag เดิม
 
 Workflow จะ publish:
 
@@ -86,24 +91,24 @@ Password: <GITHUB_PAT_FROM_SECRET_MANAGER>
 Core:
 
 ```dotenv
-CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.0
-DBT_RUNNER_UAT_IMAGE=ghcr.io/kingpac-dev/dbt-runner-uat:uat-v1.0.0
-SERVING_API_UAT_IMAGE=ghcr.io/kingpac-dev/serving-api-uat:uat-v1.0.0
+CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:<NEW_RELEASE_TAG>
+DBT_RUNNER_UAT_IMAGE=ghcr.io/kingpac-dev/dbt-runner-uat:<NEW_RELEASE_TAG>
+SERVING_API_UAT_IMAGE=ghcr.io/kingpac-dev/serving-api-uat:<NEW_RELEASE_TAG>
 ```
 
 Data Sources:
 
 ```dotenv
-SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.0
-SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.0
+SOURCE_MSSQL_INIT_IMAGE=ghcr.io/kingpac-dev/source-mssql-init:<NEW_RELEASE_TAG>
+SOURCE_MONGODB_UAT_IMAGE=ghcr.io/kingpac-dev/source-mongodb:<NEW_RELEASE_TAG>
 ```
 
 Observability:
 
 ```dotenv
-PROMETHEUS_UAT_IMAGE=ghcr.io/kingpac-dev/prometheus-uat:uat-v1.0.0
-GRAFANA_UAT_IMAGE=ghcr.io/kingpac-dev/grafana-uat:uat-v1.0.0
-LOKI_UAT_IMAGE=ghcr.io/kingpac-dev/loki-uat:uat-v1.0.0
+PROMETHEUS_UAT_IMAGE=ghcr.io/kingpac-dev/prometheus-uat:<NEW_RELEASE_TAG>
+GRAFANA_UAT_IMAGE=ghcr.io/kingpac-dev/grafana-uat:<NEW_RELEASE_TAG>
+LOKI_UAT_IMAGE=ghcr.io/kingpac-dev/loki-uat:<NEW_RELEASE_TAG>
 ```
 
 ทุก Stack ของ release เดียวกันต้องใช้ tag เดียวกัน จากนั้นกด **Pull and redeploy** ตามลำดับ
@@ -120,8 +125,8 @@ echo "${GHCR_READ_PAT}" |
   sudo docker login ghcr.io -u <GITHUB_USERNAME_THAT_OWNS_PAT> --password-stdin
 unset GHCR_READ_PAT
 
-sudo docker pull ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.0
-sudo docker image inspect ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.0
+sudo docker pull ghcr.io/kingpac-dev/clickhouse-uat:<NEW_RELEASE_TAG>
+sudo docker image inspect ghcr.io/kingpac-dev/clickhouse-uat:<NEW_RELEASE_TAG>
 ```
 
 ตรวจทุก package ใน GitHub ว่า repository access/visibility อนุญาตให้ PAT อ่านได้ หากพบ

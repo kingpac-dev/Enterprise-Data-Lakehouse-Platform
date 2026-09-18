@@ -353,15 +353,29 @@ fallback แต่ไม่มี `replace="1"` การแก้เฉพา�
 release ที่แก้แล้วเพิ่ม `replace="1"` ให้ทุก element ที่มี fallback และ UAT Dockerfile
 ไม่ copy Production HA cluster/Keeper config เข้า Single Node อีก ขั้นตอนนำขึ้นใช้:
 
-1. Commit/push การแก้ไขผ่าน review
-2. รัน GitHub Actions **Publish UAT Images to GHCR** ด้วย release tag ใหม่ เช่น `uat-v1.0.1`
-3. เปลี่ยน Core Stack variable:
+1. Commit/push การแก้ไขผ่าน review และ merge เข้า branch ที่อนุมัติแล้ว
+2. วิธีที่แนะนำคือสร้าง Git tag ใหม่จาก commit ที่อนุมัติแล้ว เช่น `uat-v1.0.1` แล้ว push tag
+   เพื่อให้ workflow checkout source ตรงกับ release เสมอ:
+
+   ```bash
+   git checkout main
+   git pull --ff-only
+   git tag -a uat-v1.0.1 -m "UAT release uat-v1.0.1"
+   git push origin uat-v1.0.1
+   ```
+
+   หากใช้ **Run workflow** แบบ manual ต้องเลือก **Use workflow from** เป็น default branch
+   ที่ merge การแก้ไขนี้แล้วก่อนกรอก `release_tag` ใหม่ ตัว workflow จะปฏิเสธ branch อื่น
+   ห้ามรันจาก `main` รุ่นเก่า และห้ามใช้ `uat-v1.0.0` ซ้ำ
+3. รอให้ GitHub Actions **Publish UAT Images to GHCR** ผ่านครบทุก image โดย ClickHouse
+   smoke test ต้องแสดง HTTP port และไม่มี Code 1000 จาก `<shard>` หรือ `<endpoint>`
+4. เปลี่ยน Core Stack variable:
 
 ```dotenv
 CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.1
 ```
 
-4. กด **Pull and redeploy** โดยไม่ลบ volumes แล้วตรวจ:
+5. กด **Pull and redeploy** โดยไม่ลบ volumes แล้วตรวจ:
 
 ```bash
 sudo docker inspect --format '{{.Config.Image}} restart={{.RestartCount}} status={{.State.Status}}' \
