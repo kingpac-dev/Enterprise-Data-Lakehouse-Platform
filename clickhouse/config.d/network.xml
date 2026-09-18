@@ -1,7 +1,11 @@
 <clickhouse>
     <!-- Network Listen Configuration -->
-    <!-- Listen on all container interfaces within isolated Docker network -->
-    <listen_host>0.0.0.0</listen_host>
+    <!--
+      The official Docker image already supplies IPv4/IPv6 wildcard
+      listen_host entries in docker_related_config.xml. Repeating a wildcard
+      here conflicts with the entrypoint's temporary 127.0.0.1 listener while
+      first-run SQL is being initialized.
+    -->
 
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
