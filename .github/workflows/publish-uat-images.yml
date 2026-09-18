@@ -133,17 +133,67 @@ jobs:
 
           case "${{ matrix.image }}" in
             clickhouse-uat)
+              smoke_suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              smoke_network="clickhouse-smoke-${smoke_suffix}"
+              minio_container="clickhouse-smoke-minio-${smoke_suffix}"
+              smoke_container="clickhouse-smoke-${smoke_suffix}"
+              minio_image="quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1"
+              clickhouse_s3_endpoint="http://${minio_container}:9000/validation/clickhouse_data/"
+
+              cleanup_clickhouse_smoke() {
+                docker rm -f "${smoke_container}" >/dev/null 2>&1 || true
+                docker rm -f "${minio_container}" >/dev/null 2>&1 || true
+                docker network rm "${smoke_network}" >/dev/null 2>&1 || true
+              }
+              trap cleanup_clickhouse_smoke EXIT
+
+              docker network create "${smoke_network}"
+              docker run --detach \
+                --name "${minio_container}" \
+                --network "${smoke_network}" \
+                --env MINIO_ROOT_USER=validation-access-key \
+                --env MINIO_ROOT_PASSWORD=validation-secret-key \
+                "${minio_image}" \
+                server /data
+
+              minio_ready=false
+              for _ in $(seq 1 60); do
+                if docker exec "${minio_container}" \
+                  mc alias set smoke http://127.0.0.1:9000 \
+                    validation-access-key validation-secret-key >/dev/null 2>&1 && \
+                  docker exec "${minio_container}" \
+                    mc ready smoke >/dev/null 2>&1; then
+                  minio_ready=true
+                  break
+                fi
+
+                if [[ "$(docker inspect --format '{{.State.Running}}' "${minio_container}")" != "true" ]]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              if [[ "${minio_ready}" != "true" ]]; then
+                echo 'MinIO did not become ready; startup logs follow.' >&2
+                docker logs "${minio_container}" >&2 || true
+                exit 1
+              fi
+
+              docker exec "${minio_container}" \
+                mc mb --ignore-existing smoke/validation
+
               clickhouse_validation_env=(
                 --env CLICKHOUSE_USER=admin
                 --env CLICKHOUSE_PASSWORD=validation-admin-password
                 --env CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
                 --env CLICKHOUSE_SKIP_USER_SETUP=1
+                --env CLICKHOUSE_INIT_TIMEOUT=180
                 --env CLICKHOUSE_ADMIN_PASSWORD=validation-admin-password
                 --env CLICKHOUSE_ETL_PASSWORD=validation-etl-password
                 --env CLICKHOUSE_BI_PASSWORD=validation-bi-password
                 --env CLICKHOUSE_API_PASSWORD=validation-api-password
                 --env CLICKHOUSE_MONITORING_PASSWORD=validation-monitoring-password
-                --env CLICKHOUSE_S3_ENDPOINT=http://127.0.0.1:19090/validation/clickhouse_data/
+                --env "CLICKHOUSE_S3_ENDPOINT=${clickhouse_s3_endpoint}"
                 --env CLICKHOUSE_S3_ACCESS_KEY=validation-access-key
                 --env CLICKHOUSE_S3_SECRET_KEY=validation-secret-key
                 --env S3_REGION=us-east-1
@@ -162,22 +212,17 @@ jobs:
                 extract-from-config \
                 --config-file=/etc/clickhouse-server/config.xml \
                 --key=storage_configuration.disks.s3_cold.endpoint |
-                grep -Fx 'http://127.0.0.1:19090/validation/clickhouse_data/'
-
-              smoke_container="clickhouse-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-              cleanup_clickhouse_smoke() {
-                docker rm -f "${smoke_container}" >/dev/null 2>&1 || true
-              }
-              trap cleanup_clickhouse_smoke EXIT
+                grep -Fx "${clickhouse_s3_endpoint}"
 
               docker run --detach \
                 --name "${smoke_container}" \
+                --network "${smoke_network}" \
                 --ulimit nofile=262144:262144 \
                 "${clickhouse_validation_env[@]}" \
                 "${image_ref}"
 
               clickhouse_ready=false
-              for _ in $(seq 1 90); do
+              for _ in $(seq 1 180); do
                 pid1_command="$(docker exec "${smoke_container}" sh -c \
                   'tr "\000" " " < /proc/1/cmdline' 2>/dev/null || true)"
 
@@ -203,6 +248,11 @@ jobs:
 
               if [[ "${clickhouse_ready}" != "true" ]]; then
                 echo 'ClickHouse did not become ready; startup logs follow.' >&2
+                docker inspect "${smoke_container}" >&2 || true
+                docker exec "${smoke_container}" sh -c \
+                  'printf "PID 1: "; tr "\000" " " < /proc/1/cmdline; printf "\n"' >&2 || true
+                docker exec "${smoke_container}" sh -c \
+                  'tail -n 200 /var/log/clickhouse-server/clickhouse-server.err.log' >&2 || true
                 docker logs "${smoke_container}" >&2 || true
                 exit 1
               fi

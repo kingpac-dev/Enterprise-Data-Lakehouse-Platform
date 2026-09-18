@@ -35,12 +35,17 @@ Workflow `.github/workflows/publish-uat-images.yml` ใช้ `GITHUB_TOKEN` ท
 2. ไปที่ **GitHub > Actions > Publish UAT Images to GHCR**
 3. วิธีที่แนะนำ: สร้าง Git tag ใหม่รูปแบบ `uat-v*` จาก commit ที่อนุมัติแล้วและ push tag
 4. ทางเลือก: เลือก **Run workflow** จาก default branch เท่านั้น และระบุ image tag ใหม่
-   เช่น `uat-v1.0.5` ห้าม reuse tag ที่มีอยู่ใน GHCR
+   เช่น `uat-v1.0.6` ห้าม reuse tag ที่มีอยู่ใน GHCR
 5. รอให้ทั้ง 8 matrix jobs สำเร็จ และตรวจ package manifests/digests ใน GitHub Packages
 
 Workflow จะตรวจว่า tag ยังไม่มีอยู่, build image candidate, ทำ smoke test แล้วจึง push เข้า GHCR
 ถ้า ClickHouse XML ไม่ผ่าน ตัว image จะไม่ถูก publish รอบใหม่ ส่วน release ที่เคย publish ไม่ครบ
 หรือ smoke test ไม่ผ่านต้องเปลี่ยนเป็น tag ใหม่ ห้ามเขียนทับ tag เดิม
+
+ClickHouse smoke test จะสร้าง MinIO ชั่วคราวและ bucket `validation` บน isolated Docker network
+เดียวกับ ClickHouse เพื่อทดสอบ S3 disk ด้วย endpoint ที่เข้าถึงได้จริง ห้ามแก้ endpoint ของ smoke test
+กลับไปเป็น `127.0.0.1` หรือ `localhost` เพราะ loopback ภายใน ClickHouse container ไม่ใช่ MinIO
+และจะทำให้ init process รอจน timeout
 
 Workflow จะ publish:
 

@@ -15,6 +15,7 @@ Mandatory Policy Rules:
 [RULE-06] ClickHouse from_env substitutions require external values (no inline fallback)
 [RULE-07] ClickHouse logger and system-log configuration is structurally valid
 [RULE-08] ClickHouse Docker user provisioning has a single authoritative source
+[RULE-09] ClickHouse CI smoke test uses an isolated reachable S3-compatible service
 """
 
 import os
@@ -319,6 +320,57 @@ class PolicyLinter:
         })
         return passed
 
+    def check_rule_09_clickhouse_smoke_s3_dependency(self) -> bool:
+        """RULE-09: Rejects loopback S3 endpoints in the container smoke test."""
+        violations = []
+        workflow_path = os.path.join(
+            self.root_dir, ".github/workflows/publish-uat-images.yml"
+        )
+
+        try:
+            with open(workflow_path, "r", encoding="utf-8") as workflow_file:
+                workflow_content = workflow_file.read()
+        except OSError as exc:
+            violations.append(f"publish workflow: {exc}")
+        else:
+            if re.search(
+                r"CLICKHOUSE_S3_ENDPOINT=http://(?:127\.0\.0\.1|localhost)",
+                workflow_content,
+            ):
+                violations.append(
+                    "ClickHouse container smoke test must not use a loopback S3 endpoint"
+                )
+
+            required_markers = {
+                'docker network create "${smoke_network}"':
+                    "an isolated Docker network",
+                'minio_container="clickhouse-smoke-minio-${smoke_suffix}"':
+                    "a dedicated MinIO smoke container",
+                'clickhouse_s3_endpoint="http://${minio_container}:9000/validation/clickhouse_data/"':
+                    "the MinIO container DNS endpoint",
+                'mc mb --ignore-existing smoke/validation':
+                    "the validation bucket bootstrap",
+                '--network "${smoke_network}"':
+                    "network attachment for smoke containers",
+            }
+            for marker, description in required_markers.items():
+                if marker not in workflow_content:
+                    violations.append(
+                        f"publish workflow is missing {description}"
+                    )
+
+        passed = not violations
+        self.findings.append({
+            "rule": "RULE-09: ClickHouse Smoke S3 Dependency",
+            "passed": passed,
+            "details": (
+                "ClickHouse smoke test provisions reachable MinIO on an isolated network."
+                if passed
+                else f"Invalid ClickHouse smoke S3 setup: {violations}"
+            )
+        })
+        return passed
+
     def run_all(self) -> bool:
         print("=" * 68)
         print(" ENTERPRISE POLICY-AS-CODE COMPLIANCE LINTER (AGENTS.MD)")
@@ -334,8 +386,9 @@ class PolicyLinter:
         r6 = self.check_rule_06_clickhouse_env_substitutions()
         r7 = self.check_rule_07_clickhouse_logging_config()
         r8 = self.check_rule_08_clickhouse_docker_user_setup()
+        r9 = self.check_rule_09_clickhouse_smoke_s3_dependency()
 
-        all_passed = all([r1, r2, r3, r4, r5, r6, r7, r8])
+        all_passed = all([r1, r2, r3, r4, r5, r6, r7, r8, r9])
 
         for f in self.findings:
             mark = "[PASS]" if f["passed"] else "[FAIL]"
