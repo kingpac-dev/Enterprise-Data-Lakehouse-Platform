@@ -33,12 +33,9 @@ GRANT SELECT ON serving.* TO role_api_service;
 -- 7. Monitoring Service Grants (System tables only)
 GRANT SELECT ON system.* TO role_monitoring_service;
 
--- 8. Assign Roles to Users
-GRANT role_platform_admin TO admin;
-GRANT role_etl_service TO etl_user;
-GRANT role_bi_readonly TO bi_user;
-GRANT role_api_service TO api_user;
-GRANT role_monitoring_service TO monitoring_user;
+-- 8. XML-backed users are provisioned from users.xml. ClickHouse 26.8 treats
+-- users_xml storage as read-only, so user grants must be declared in XML rather
+-- than assigned here via SQL.
 
 -- 9. Row-Level Security Policy Template (Example: Branch-level segregation)
 -- Restricts BI users with specific branch settings to view only authorized records
