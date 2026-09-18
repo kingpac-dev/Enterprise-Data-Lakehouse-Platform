@@ -18,8 +18,10 @@ class DataReconciliationEngine:
     def __init__(self):
         self.host = os.getenv("CLICKHOUSE_HOST", "localhost")
         self.port = int(os.getenv("CLICKHOUSE_PORT_HTTP", "18123"))
-        self.user = os.getenv("CLICKHOUSE_ADMIN_USER", "admin")
-        self.password = os.getenv("CLICKHOUSE_ADMIN_PASSWORD", "change_this_admin_password_in_prod")
+        self.user = os.getenv("CLICKHOUSE_API_USER", "api_user")
+        self.password = os.getenv("CLICKHOUSE_API_PASSWORD")
+        if not self.password:
+            raise RuntimeError("CLICKHOUSE_API_PASSWORD is required")
 
     def query(self, sql: str) -> str:
         """Executes a SQL query against ClickHouse HTTP interface."""

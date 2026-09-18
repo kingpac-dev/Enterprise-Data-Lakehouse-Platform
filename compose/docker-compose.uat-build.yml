@@ -23,8 +23,8 @@ services:
   serving-api-uat:
     image: ${SERVING_API_UAT_IMAGE:-lakehouse/serving-api-uat:1.0.0}
     build:
-      context: ../api
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: api/Dockerfile
 
   source-mssql-init:
     image: ${SOURCE_MSSQL_INIT_IMAGE:-lakehouse/source-mssql-init:2022-CU16}

@@ -9,8 +9,6 @@ networks:
   observability:
     external: true
     name: ${OBSERVABILITY_NETWORK:-lakehouse-uat-observability}
-  management:
-    driver: bridge
 
 volumes:
   prometheus_prod_data:
@@ -58,7 +56,6 @@ services:
       - grafana_prod_data:/var/lib/grafana
     networks:
       - observability
-      - management
     restart: always
 
   # ----------------------------------------------------------------------------

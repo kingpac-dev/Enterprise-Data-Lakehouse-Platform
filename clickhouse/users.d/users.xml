@@ -2,7 +2,7 @@
     <users>
         <!-- Default admin user with credentials injected via environment variables -->
         <admin>
-            <password from_env="CLICKHOUSE_ADMIN_PASSWORD">change_this_admin_password_in_prod</password>
+            <password from_env="CLICKHOUSE_ADMIN_PASSWORD" replace="1">change_this_admin_password_in_prod</password>
             <networks>
                 <ip>::/0</ip>
                 <ip>0.0.0.0/0</ip>
@@ -14,7 +14,7 @@
 
         <!-- Service Accounts -->
         <etl_user>
-            <password from_env="CLICKHOUSE_ETL_PASSWORD">change_this_etl_password_in_prod</password>
+            <password from_env="CLICKHOUSE_ETL_PASSWORD" replace="1">change_this_etl_password_in_prod</password>
             <networks>
                 <ip>::/0</ip>
                 <ip>0.0.0.0/0</ip>
@@ -25,7 +25,7 @@
         </etl_user>
 
         <bi_user>
-            <password from_env="CLICKHOUSE_BI_PASSWORD">change_this_bi_password_in_prod</password>
+            <password from_env="CLICKHOUSE_BI_PASSWORD" replace="1">change_this_bi_password_in_prod</password>
             <networks>
                 <ip>::/0</ip>
                 <ip>0.0.0.0/0</ip>
@@ -36,7 +36,7 @@
         </bi_user>
 
         <api_user>
-            <password from_env="CLICKHOUSE_API_PASSWORD">change_this_api_password_in_prod</password>
+            <password from_env="CLICKHOUSE_API_PASSWORD" replace="1">change_this_api_password_in_prod</password>
             <networks>
                 <ip>::/0</ip>
                 <ip>0.0.0.0/0</ip>
@@ -47,7 +47,7 @@
         </api_user>
 
         <monitoring_user>
-            <password from_env="CLICKHOUSE_MONITORING_PASSWORD">change_this_monitoring_password_in_prod</password>
+            <password from_env="CLICKHOUSE_MONITORING_PASSWORD" replace="1">change_this_monitoring_password_in_prod</password>
             <networks>
                 <ip>::/0</ip>
                 <ip>0.0.0.0/0</ip>

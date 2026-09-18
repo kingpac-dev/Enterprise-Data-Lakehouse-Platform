@@ -6,10 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/
+COPY api/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app/
+COPY api/ /app/
+COPY data_quality/ /app/data_quality/
 
 EXPOSE 8000
 

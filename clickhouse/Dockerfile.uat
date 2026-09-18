@@ -1,5 +1,10 @@
-FROM clickhouse/clickhouse-server:26.8
+FROM clickhouse/clickhouse-server:26.8.6.5
 
-COPY clickhouse/config.d/ /etc/clickhouse-server/config.d/
+# UAT is a single-node topology. Do not bake the production 1S2R cluster or
+# 3-node Keeper configuration into this image.
+COPY clickhouse/config.d/logging.xml /etc/clickhouse-server/config.d/logging.xml
+COPY clickhouse/config.d/network.xml /etc/clickhouse-server/config.d/network.xml
+COPY clickhouse/config.d/prometheus.xml /etc/clickhouse-server/config.d/prometheus.xml
+COPY clickhouse/config.d/storage_configuration.xml /etc/clickhouse-server/config.d/storage_configuration.xml
 COPY clickhouse/users.d/ /etc/clickhouse-server/users.d/
 COPY sql/init/ /docker-entrypoint-initdb.d/
