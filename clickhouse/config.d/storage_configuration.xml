@@ -13,10 +13,10 @@
             <!-- Cold S3-compatible Lake Storage Disk -->
             <s3_cold>
                 <type>s3</type>
-                <endpoint from_env="CLICKHOUSE_S3_ENDPOINT" replace="1">http://minio:9000/enterprise-data-lake/clickhouse_data/</endpoint>
-                <access_key_id from_env="CLICKHOUSE_S3_ACCESS_KEY" replace="1">lakehouse_s3_access_key</access_key_id>
-                <secret_access_key from_env="CLICKHOUSE_S3_SECRET_KEY" replace="1">lakehouse_s3_secret_change_me</secret_access_key>
-                <region from_env="S3_REGION" replace="1">us-east-1</region>
+                <endpoint replace="1" from_env="CLICKHOUSE_S3_ENDPOINT">http://minio:9000/enterprise-data-lake/clickhouse_data/</endpoint>
+                <access_key_id replace="1" from_env="CLICKHOUSE_S3_ACCESS_KEY">lakehouse_s3_access_key</access_key_id>
+                <secret_access_key replace="1" from_env="CLICKHOUSE_S3_SECRET_KEY">lakehouse_s3_secret_change_me</secret_access_key>
+                <region replace="1" from_env="S3_REGION">us-east-1</region>
                 <support_batch_delete>true</support_batch_delete>
                 <use_environment_credentials>false</use_environment_credentials>
                 <!-- Local metadata caching layer for S3 objects -->
