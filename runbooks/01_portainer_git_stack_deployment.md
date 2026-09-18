@@ -337,7 +337,7 @@ curl -fsS http://127.0.0.1:19090/minio/health/ready
 การเปลี่ยน `S3_ACCESS_KEY`/`S3_SECRET_KEY` จะเปลี่ยน credential ที่ ClickHouse ใช้เข้าถึง
 MinIO ด้วย จึงต้อง redeploy Core Stack ทั้งชุดและตรวจ ClickHouse health หลังการ rotate
 
-### ClickHouse Code 1000: `from_env` ไม่มี `replace`
+### ClickHouse Code 1000: `replace` ไม่มีหรืออยู่หลัง `from_env`
 
 หาก log แสดงข้อความลักษณะนี้:
 
@@ -346,33 +346,36 @@ Element <shard> has value and does not have 'replace' attribute,
 can't process from_env substitution
 ```
 
-แสดงว่า `clickhouse-uat` image ถูก build จาก XML รุ่นเก่าที่กำหนดทั้ง `from_env` และค่า
-fallback แต่ไม่มี `replace="1"` การแก้เฉพาะ Environment variables ใน Portainer ไม่เพียงพอ
+แสดงว่า `clickhouse-uat` image ถูก build จาก XML ที่กำหนดทั้ง `from_env` และค่า fallback
+แต่ไม่มี `replace="1"` หรือวาง `replace` ไว้หลัง `from_env` การแก้เฉพาะ Environment variables
+ใน Portainer ไม่เพียงพอ
 เพราะ XML ถูก bake อยู่ใน image
 
-release ที่แก้แล้วเพิ่ม `replace="1"` ให้ทุก element ที่มี fallback และ UAT Dockerfile
+ClickHouse กำหนดให้ attribute `replace` ต้องอยู่ก่อน `from_env` รูปแบบที่ถูกต้องคือ
+`<endpoint replace="1" from_env="CLICKHOUSE_S3_ENDPOINT">...</endpoint>` release ที่แก้แล้ว
+ใช้รูปแบบนี้กับทุก element ที่มี fallback และ UAT Dockerfile
 ไม่ copy Production HA cluster/Keeper config เข้า Single Node อีก ขั้นตอนนำขึ้นใช้:
 
 1. Commit/push การแก้ไขผ่าน review และ merge เข้า branch ที่อนุมัติแล้ว
-2. วิธีที่แนะนำคือสร้าง Git tag ใหม่จาก commit ที่อนุมัติแล้ว เช่น `uat-v1.0.1` แล้ว push tag
+2. วิธีที่แนะนำคือสร้าง Git tag ใหม่จาก commit ที่อนุมัติแล้ว เช่น `uat-v1.0.2` แล้ว push tag
    เพื่อให้ workflow checkout source ตรงกับ release เสมอ:
 
    ```bash
    git checkout main
    git pull --ff-only
-   git tag -a uat-v1.0.1 -m "UAT release uat-v1.0.1"
-   git push origin uat-v1.0.1
+   git tag -a uat-v1.0.2 -m "UAT release uat-v1.0.2"
+   git push origin uat-v1.0.2
    ```
 
    หากใช้ **Run workflow** แบบ manual ต้องเลือก **Use workflow from** เป็น default branch
    ที่ merge การแก้ไขนี้แล้วก่อนกรอก `release_tag` ใหม่ ตัว workflow จะปฏิเสธ branch อื่น
-   ห้ามรันจาก `main` รุ่นเก่า และห้ามใช้ `uat-v1.0.0` ซ้ำ
+   ห้ามรันจาก `main` รุ่นเก่า และห้ามใช้ `uat-v1.0.0` หรือ `uat-v1.0.1` ซ้ำ
 3. รอให้ GitHub Actions **Publish UAT Images to GHCR** ผ่านครบทุก image โดย ClickHouse
    smoke test ต้องแสดง HTTP port และไม่มี Code 1000 จาก `<shard>` หรือ `<endpoint>`
 4. เปลี่ยน Core Stack variable:
 
 ```dotenv
-CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.1
+CLICKHOUSE_UAT_IMAGE=ghcr.io/kingpac-dev/clickhouse-uat:uat-v1.0.2
 ```
 
 5. กด **Pull and redeploy** โดยไม่ลบ volumes แล้วตรวจ:
@@ -486,11 +489,11 @@ sudo docker inspect --format '{{.Name}} -> {{.Config.Image}}' \
   lakehouse-source-mssql-init lakehouse-source-mongodb
 ```
 
-ค่าที่ถูกต้องสำหรับตัวอย่าง release `uat-v1.0.1` คือ:
+ค่าที่ถูกต้องสำหรับตัวอย่าง release `uat-v1.0.2` คือ:
 
 ```text
-lakehouse-source-mssql-init -> ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.1
-lakehouse-source-mongodb -> ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.1
+lakehouse-source-mssql-init -> ghcr.io/kingpac-dev/source-mssql-init:uat-v1.0.2
+lakehouse-source-mongodb -> ghcr.io/kingpac-dev/source-mongodb:uat-v1.0.2
 ```
 
 หากสอง container นี้แสดง `serving-api-uat` หรือ log มี `uvicorn`/

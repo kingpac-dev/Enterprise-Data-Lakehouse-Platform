@@ -221,7 +221,7 @@ robot secret ตอนสร้างเพียงครั้งเดีย�
 ```bash
 REGISTRY=harbor.kingpac-th.com
 PROJECT=lakehouse
-RELEASE_TAG=uat-v1.0.0
+RELEASE_TAG=<APPROVED_RELEASE_TAG>
 
 export CLICKHOUSE_UAT_IMAGE="${REGISTRY}/${PROJECT}/clickhouse-uat:${RELEASE_TAG}"
 export DBT_RUNNER_UAT_IMAGE="${REGISTRY}/${PROJECT}/dbt-runner-uat:${RELEASE_TAG}"
@@ -261,9 +261,9 @@ daemon บน UAT endpoint เชื่อถือก่อน
 ใช้ image variables ที่อ้าง release เดียวกัน ตัวอย่าง Core:
 
 ```dotenv
-CLICKHOUSE_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/clickhouse-uat:uat-v1.0.0
-DBT_RUNNER_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/dbt-runner-uat:uat-v1.0.0
-SERVING_API_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/serving-api-uat:uat-v1.0.0
+CLICKHOUSE_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/clickhouse-uat:<APPROVED_RELEASE_TAG>
+DBT_RUNNER_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/dbt-runner-uat:<APPROVED_RELEASE_TAG>
+SERVING_API_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/serving-api-uat:<APPROVED_RELEASE_TAG>
 ```
 
 ตั้งค่า Stacks อื่นตาม Runbook 01 และใช้ immutable tag/digest เดียวกัน ห้ามใช้ `latest`
@@ -276,7 +276,7 @@ SERVING_API_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/serving-api-uat:uat-v1.0.0
 getent hosts harbor.kingpac-th.com
 curl -fsS https://harbor.kingpac-th.com/api/v2.0/ping
 sudo docker pull \
-  harbor.kingpac-th.com/lakehouse/clickhouse-uat:uat-v1.0.0
+  harbor.kingpac-th.com/lakehouse/clickhouse-uat:<APPROVED_RELEASE_TAG>
 ```
 
 ตรวจใน Harbor UI ว่ามี scan report, immutable release tag และ audit log ก่อน Deploy

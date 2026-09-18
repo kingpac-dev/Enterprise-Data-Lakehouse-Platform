@@ -25,7 +25,7 @@
     <!-- Macros used by ReplicatedMergeTree tables -->
     <macros>
         <cluster>cluster_1s_2r</cluster>
-        <shard from_env="CLICKHOUSE_SHARD" replace="1">1</shard>
-        <replica from_env="CLICKHOUSE_REPLICA" replace="1">1</replica>
+        <shard replace="1" from_env="CLICKHOUSE_SHARD">1</shard>
+        <replica replace="1" from_env="CLICKHOUSE_REPLICA">1</replica>
     </macros>
 </clickhouse>

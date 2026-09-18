@@ -177,7 +177,7 @@ class PolicyLinter:
         return passed
 
     def check_rule_06_clickhouse_env_substitutions(self) -> bool:
-        """RULE-06: Requires replace=1 when from_env has a fallback text value."""
+        """RULE-06: Requires replace=1 before from_env when a fallback value exists."""
         violations = []
         pattern = os.path.join(self.root_dir, "clickhouse", "**", "*.xml")
 
@@ -194,16 +194,23 @@ class PolicyLinter:
                     continue
                 if not (element.text or "").strip():
                     continue
+                rel_path = os.path.relpath(config_path, self.root_dir)
                 if element.attrib.get("replace", "").lower() not in {"1", "true"}:
-                    rel_path = os.path.relpath(config_path, self.root_dir)
-                    violations.append(f"{rel_path}: <{element.tag}>")
+                    violations.append(f"{rel_path}: <{element.tag}> missing replace=1")
+                    continue
+
+                attribute_names = list(element.attrib)
+                if attribute_names.index("replace") > attribute_names.index("from_env"):
+                    violations.append(
+                        f"{rel_path}: <{element.tag}> must declare replace before from_env"
+                    )
 
         passed = not violations
         self.findings.append({
             "rule": "RULE-06: ClickHouse Environment Substitution",
             "passed": passed,
             "details": (
-                "All from_env elements with fallback values declare replace=1."
+                "All from_env elements with fallback values declare replace=1 before from_env."
                 if passed
                 else f"Invalid from_env fallback elements: {violations}"
             )

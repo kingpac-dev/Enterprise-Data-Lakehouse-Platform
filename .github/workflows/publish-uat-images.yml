@@ -100,6 +100,11 @@ jobs:
             exit 1
           fi
 
+      - name: Validate ClickHouse configuration policy
+        if: matrix.image == 'clickhouse-uat'
+        shell: bash
+        run: python governance/policy_linter.py
+
       - name: Set up isolated Buildx builder
         shell: bash
         run: |
