@@ -1,5 +1,7 @@
 # คู่มือติดตั้งและใช้งาน Production แบบทีละโหนด
 
+> ระยะเริ่มต้นแบบ **1 Node ที่ไม่มี HA** ใช้ [คู่มือ Single Node](PROD_SINGLE_NODE_INSTALLATION_GUIDE.md) และ [Compose เฉพาะ single node](../compose/docker-compose.prod-single.yml). คู่มือนี้เป็นเส้นทางขยายสู่ 3 failure domains หลังออกแบบ migration/replication และผ่าน gate ใหม่.
+
 **Enterprise Data Lakehouse Platform · ฉบับเตรียมติดตั้ง 2026-11-02**  
 **สถานะ repository: NOT READY FOR PRODUCTION.** เอกสารนี้เป็นขั้นตอนปฏิบัติและเกณฑ์ตรวจรับสำหรับ target architecture; ยังไม่มีผลทดสอบ production หรือสิทธิ์ให้ agent deploy. ใช้ร่วมกับ [นโยบาย](../AGENTS.md), [Production architecture](architecture/PROD_ARCHITECTURE.md), [production runbook](../runbooks/04_portainer_prod_deployment.md) และ [รายการ P0/P1](PRODUCTION_READINESS_SPECIALIST_WORKLIST.md). หากข้อใดเป็น `TBD` หรือ gate ไม่ผ่าน ให้หยุดที่ขั้นนั้น.
 

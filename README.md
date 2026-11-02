@@ -26,7 +26,7 @@
 
 Repository นี้รวม Compose stacks, ClickHouse DDL, dbt models, Python ingestion/orchestration, FastAPI, monitoring, governance checks และ runbooks สำหรับวงจรข้อมูลตัวอย่างตั้งแต่รับข้อมูลจนถึงการให้บริการวิเคราะห์ ใช้ **Ubuntu 24 LTS, Docker Engine/Compose V2 และ ClickHouse 26.8 LTS** เป็น baseline ตาม [AGENTS.md](AGENTS.md).
 
-**สถานะที่ควรเข้าใจ:** ผู้ดูแลแจ้งว่าติดตั้ง UAT แล้ว และภาพ Portainer ที่ให้มาแสดง stack entries ครบ 4 รายการ; ภาพยังไม่ยืนยัน container health หรือผล integration tests. DEV/UAT ใน repo เป็น **single-host** สำหรับ functional test และ benchmark จึงไม่ใช่ high availability. ไฟล์ production Compose และ runbook เป็น **แบบออกแบบ/ชุดตั้งต้นสำหรับหลาย host**; ยังต้องกำหนด IP/DNS, image digest, secret manager, network policy และผ่านการทดสอบ failover/restore พร้อม human sign-off ก่อน promotion. ไม่ควรตีความไฟล์หรือรายงานการทดสอบที่ commit ไว้ว่าเป็นหลักฐานของสภาพแวดล้อมปัจจุบัน.
+**สถานะที่ควรเข้าใจ:** ผู้ดูแลแจ้งว่าติดตั้ง UAT แล้ว และภาพ Portainer ที่ให้มาแสดง stack entries ครบ 4 รายการ; ภาพยังไม่ยืนยัน container health หรือผล integration tests. DEV/UAT ใน repo เป็น **single-host** สำหรับ functional test และ benchmark จึงไม่ใช่ high availability. มี [ชุด PROD Single Node](docs/PROD_SINGLE_NODE_INSTALLATION_GUIDE.md) สำหรับเริ่ม ClickHouse foundation บน host เดียวโดยไม่มี HA; ส่วนไฟล์ production หลาย host เป็นแบบออกแบบ/ชุดตั้งต้นสำหรับการขยาย. ทั้งสองทางยังต้องกำหนด IP/DNS, image digest, secret manager, network policy, backup/restore และผ่าน human sign-off ก่อนรับข้อมูลจริง; เส้นทาง HA ต้องมี replication/failover test เพิ่ม. ไม่ควรตีความไฟล์หรือรายงานการทดสอบที่ commit ไว้ว่าเป็นหลักฐานของสภาพแวดล้อมปัจจุบัน.
 
 ### 📚 เอกสารและคู่มือการใช้งานระบบ (Key Documentation)
 
@@ -35,6 +35,7 @@ Repository นี้รวม Compose stacks, ClickHouse DDL, dbt models, Python
 - 📕 **[คู่มือการติดตั้งและการใช้งานจริง (Operations & User Manual)](docs/OPERATIONS_MANUAL.md)**: การเตรียมเครื่อง, การติดตั้งบน Ubuntu 24 LTS, การบริหาร Portainer, การต่อ Power BI/DBeaver, และการกู้คืน DR
 - 🧪 **[คู่มือ Deploy UAT Single Node](runbooks/01_portainer_git_stack_deployment.md)**: Portainer 4-stack deployment สำหรับ UAT
 - 🏭 **[คู่มือ Deploy Production Multi-Host](runbooks/04_portainer_prod_deployment.md)**: Production readiness gates และ 3-failure-domain deployment
+- 🧱 **[คู่มือเริ่ม PROD แบบ 1 Node](docs/PROD_SINGLE_NODE_INSTALLATION_GUIDE.md)**: ClickHouse foundation แบบ host เดียว, image/Compose เฉพาะ PROD, Published Ports, preflight และเกณฑ์รับข้อมูลจริง; ไม่มี HA
 - 🧩 **[คู่มือติดตั้งและใช้งาน PROD ทีละโหนด](docs/PROD_INSTALLATION_AND_OPERATIONS_GUIDE.md)**: ข้อกำหนด host, network/Published Ports, ลำดับ Node 03 → 01 → 02 → ClickHouse replicas, verification, การใช้งานและ sign-off
 - 🧭 **[UAT Architecture Design](docs/architecture/UAT_ARCHITECTURE.md)**: Single-node topology, stacks, networks และ data flow
 - 🏗️ **[Production Architecture Design](docs/architecture/PROD_ARCHITECTURE.md)**: Multi-host HA target architecture และ security zones
@@ -401,6 +402,7 @@ agents/                       Engineering agent role definitions
 | Architecture | [UAT](docs/architecture/UAT_ARCHITECTURE.md), [Production target](docs/architecture/PROD_ARCHITECTURE.md) |
 | Deploy | [Portainer UAT](runbooks/01_portainer_git_stack_deployment.md), [GHCR UAT](runbooks/06_github_ghcr_uat.md), [Production gate](runbooks/04_portainer_prod_deployment.md) |
 | Production ทีละโหนด | [Installation & Operations Guide](docs/PROD_INSTALLATION_AND_OPERATIONS_GUIDE.md) |
+| Production ระยะ 1 Node | [Single Node Installation Guide](docs/PROD_SINGLE_NODE_INSTALLATION_GUIDE.md), [Compose](compose/docker-compose.prod-single.yml), [Dockerfile](clickhouse/Dockerfile.prod-single) |
 | Data & verification | [Catalog/lineage](docs/DATA_CATALOG.md), [Acceptance report](docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md), [Backup/restore](runbooks/02_backup_and_restore_operations.md) |
 | Operations | [Troubleshooting/failover](runbooks/03_troubleshooting_and_failover.md), [Harbor UAT registry](runbooks/05_harbor_uat_registry.md), [FinOps report](docs/FINOPS_REPORT.md) |
 | Design decisions | [Storage/Parquet](adr/0001-storage-separation-and-parquet.md), [Medallion](adr/0002-clickhouse-medallion-layering.md), [Portainer stacks](adr/0003-docker-and-portainer-git-stacks.md), [Keeper](adr/0004-clickhouse-keeper-coordination.md), [dbt](adr/0005-dbt-clickhouse-transformation.md) |

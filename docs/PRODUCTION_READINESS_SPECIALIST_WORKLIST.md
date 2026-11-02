@@ -1,5 +1,7 @@
 # แผนงานผู้เชี่ยวชาญเฉพาะด้านเพื่อยกระดับ UAT สู่ระบบใช้งานจริง
 
+> ระยะเริ่มต้น 1 Node มี [คู่มือติดตั้งเฉพาะ](PROD_SINGLE_NODE_INSTALLATION_GUIDE.md) และ [single-node Compose](../compose/docker-compose.prod-single.yml). P0 ที่เกี่ยวกับ replicated tables/host-loss (P0-01) เป็น gate สำหรับการขยาย HA; งาน data correctness, access, backup, security และ observability ยังเป็น gate ก่อนรับข้อมูล production จริงบน 1 Node.
+
 **สถานะ:** รายการวิเคราะห์จาก repository ณ 2026-11-02; **ยังไม่ผ่าน Production Readiness Gate** และไม่มีการ deploy หรือทดสอบ live environment ในงานรอบนี้  
 **นโยบายหลัก:** [AGENTS.md](../AGENTS.md) · **ทีมที่เรียกใช้งานได้:** [agents/README.md](../agents/README.md) · **เกณฑ์ปล่อยระบบ:** [Production runbook](../runbooks/04_portainer_prod_deployment.md)
 
