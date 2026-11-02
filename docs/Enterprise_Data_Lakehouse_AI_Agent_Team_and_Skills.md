@@ -46,6 +46,9 @@ AI agents are engineering assistants, not autonomous production authorities. The
 | A09 Documentation / ADR Agent      | Maintain coherent documentation and decision traceability                          | README, runbooks, ADR index, cross-document consistency          |
 | A10 BI / Data Product Analyst      | Translate business questions/KPIs into data product requirements                   | Metric definitions, UAT scenarios, serving requirements          |
 | A11 Capacity / FinOps Analyst      | Analyze resource usage and growth; cost/performance trade-offs                     | Capacity model, benchmark analysis, cost scenarios               |
+| A12 API / AI Application Engineer  | Govern API serving contracts and evaluate experimental AI helpers                  | Endpoint/permission matrix, integration and AI evaluation evidence |
+
+> **Current implementation handoff (2026-11-02):** The executable role briefs are indexed in [agents/README.md](../agents/README.md). Evidence-based P0/P1 tasks and acceptance gates are in the [specialist worklist](PRODUCTION_READINESS_SPECIALIST_WORKLIST.md). This baseline remains a design reference; current production status is governed by the production runbook.
 
 # 3. Agent Collaboration Flow
 

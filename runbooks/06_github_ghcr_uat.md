@@ -1,5 +1,7 @@
 # Runbook 06: ใช้ GitHub และ GHCR กับ Portainer UAT
 
+สำหรับ UAT ที่ติดตั้งแล้ว ให้ตรวจ Git reference และ image digest ของ 4 stacks ตาม [คู่มือใช้งาน UAT](../docs/UAT_USER_GUIDE.md) ก่อนเลือก release ใหม่. ภาพ Stack list ที่ผู้ดูแลให้มายืนยันเพียงรายการ stacks; ไม่ยืนยันว่าใช้ GHCR, tag ใด หรือ smoke test ผ่านแล้ว. ห้าม pull/redeploy เพียงเพื่อดูสถานะ.
+
 เอกสารนี้เป็นวิธีที่แนะนำเมื่อไม่ติดตั้ง Harbor โดยใช้ GitHub repository เป็นแหล่ง Compose/config
 และ GitHub Container Registry (`ghcr.io`) เป็นแหล่ง custom images สำหรับ UAT
 

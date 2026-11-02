@@ -1,5 +1,7 @@
 # Runbook 04: Production Multi-Host Deployment ด้วย Portainer
 
+> ขั้นตอนตั้งแต่ข้อกำหนด host, สถาปัตยกรรมเครือข่าย, Published Ports, ติดตั้ง/ตรวจรับทีละโหนดจนถึงเปิดใช้งานอยู่ใน [คู่มือ Production Installation & Operations](../docs/PROD_INSTALLATION_AND_OPERATIONS_GUIDE.md). ทั้งสองเอกสารใช้ gate เดียวกัน; Compose ปัจจุบันยังไม่ผ่าน gate สำหรับ production.
+
 เอกสารนี้สำหรับ **Production เท่านั้น** สำหรับ UAT Single Node ให้ใช้
 [Runbook 01: UAT Deployment](01_portainer_git_stack_deployment.md)
 ดู target architecture ที่ [Production Architecture Design](../docs/architecture/PROD_ARCHITECTURE.md)
@@ -80,7 +82,7 @@ Network/Security owner จะอนุมัติ
 
 รายการต่อไปนี้ยังต้องแก้ก่อน Production:
 
-1. ClickHouse/Keeper images ใช้ tag `26.8`/`26.8-alpine` แต่ยังไม่ได้ pin patch/digest
+1. Compose บังคับรับ `CLICKHOUSE_PROD_IMAGE`, `KEEPER_PROD_IMAGE` และ `PORTAINER_AGENT_PROD_IMAGE` แล้ว แต่ยังต้องระบุ patch/digest ที่อนุมัติและตรวจ image scan จริง
 2. Production S3 endpoint, bucket, KMS และ backup credentials ยังไม่ได้กำหนด
 3. Production observability topology/configuration ยังไม่มี; ไฟล์ observability ปัจจุบัน
    ใช้ shared Docker network สำหรับ UAT Single Node
@@ -94,6 +96,8 @@ Network/Security owner จะอนุมัติ
 7. TLS สำหรับ ClickHouse HTTP/native, interserver และ Keeper ยังต้องออกแบบ/อนุมัติ
 8. Load balancer/VIP และ health-check policy ยังเป็น `TBD`
 9. Production Data Sources และ Streaming topology ยังไม่มี approved Compose/IaC
+10. SQL init ยังใช้ local MergeTree/ReplacingMergeTree/AggregatingMergeTree; ต้องออกแบบ replicated tables, distributed DDL, backfill และพิสูจน์ replica parity ก่อนกล่าวอ้าง HA
+11. Node 1/2 Compose ยังรวม Keeper กับ ClickHouse ใน stack เดียว; ต้องจัด approved Git-backed Keeper-only/ClickHouse-only stages ก่อน bootstrap ทีละโหนด
 
 จนกว่ารายการเหล่านี้จะปิดครบ ให้ถือว่าสถานะเป็น **NOT READY FOR PRODUCTION**
 
@@ -121,6 +125,9 @@ docker compose version
 HOST_NODE1_IP=TBD
 HOST_NODE2_IP=TBD
 HOST_NODE3_IP=TBD
+CLICKHOUSE_PROD_IMAGE=<APPROVED_PATCH_AND_DIGEST>
+KEEPER_PROD_IMAGE=<APPROVED_PATCH_AND_DIGEST>
+PORTAINER_AGENT_PROD_IMAGE=<APPROVED_DIGEST>
 CLICKHOUSE_ADMIN_USER=TBD
 CLICKHOUSE_ADMIN_PASSWORD=<SECRET_MANAGER_REFERENCE>
 CLICKHOUSE_ETL_PASSWORD=<SECRET_MANAGER_REFERENCE>

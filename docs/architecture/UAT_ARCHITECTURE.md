@@ -6,6 +6,8 @@
 performance baseline บน Ubuntu 24 LTS host เดียว ไม่ใช่ High Availability และไม่ใช้
 Production PII ที่ไม่ได้ mask
 
+สำหรับ UAT ที่ผู้ดูแลติดตั้งแล้ว ดู [คู่มือใช้งานทุกระบบบน UAT](../UAT_USER_GUIDE.md) เพื่อแยกสถานะ stack ที่ปรากฏใน Portainer ออกจากผล health, data flow และ restore ที่ต้องตรวจจริง.
+
 ![UAT Architecture Overview](../assets/architecture/uat-architecture-overview.png)
 
 ## 2. Logical Architecture

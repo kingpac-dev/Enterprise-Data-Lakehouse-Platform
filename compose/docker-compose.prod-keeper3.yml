@@ -20,19 +20,19 @@ services:
   # Keeper Member 3 (Quorum Tie-Breaker)
   # ----------------------------------------------------------------------------
   keeper-03:
-    image: clickhouse/clickhouse-keeper:26.8-alpine
+    image: ${KEEPER_PROD_IMAGE:?Set an approved 26.8 patch image digest}
     container_name: lakehouse-keeper-03
     ports:
-      - "9181:9181"   # Client port
-      - "9234:9234"   # Raft peer port
+      - "${HOST_NODE3_IP:?Set approved private Node 3 IP}:9181:9181"   # Client port
+      - "${HOST_NODE3_IP:?Set approved private Node 3 IP}:9234:9234"   # Raft peer port
     environment:
       KEEPER_SERVER_ID: 3
     extra_hosts:
-      - "keeper-01:${HOST_NODE1_IP:-127.0.0.1}"
-      - "keeper-02:${HOST_NODE2_IP:-127.0.0.1}"
-      - "keeper-03:${HOST_NODE3_IP:-127.0.0.1}"
-      - "clickhouse-01:${HOST_NODE1_IP:-127.0.0.1}"
-      - "clickhouse-02:${HOST_NODE2_IP:-127.0.0.1}"
+      - "keeper-01:${HOST_NODE1_IP:?Set approved private Node 1 IP}"
+      - "keeper-02:${HOST_NODE2_IP:?Set approved private Node 2 IP}"
+      - "keeper-03:${HOST_NODE3_IP:?Set approved private Node 3 IP}"
+      - "clickhouse-01:${HOST_NODE1_IP:?Set approved private Node 1 IP}"
+      - "clickhouse-02:${HOST_NODE2_IP:?Set approved private Node 2 IP}"
     volumes:
       - keeper_node3_data:/var/lib/clickhouse-keeper
       - ../clickhouse/config.d/keeper_config.xml:/etc/clickhouse-keeper/keeper_config.xml:ro
@@ -50,10 +50,10 @@ services:
   # ----------------------------------------------------------------------------
   portainer-agent:
     profiles: ["agent"]
-    image: portainer/agent:2.21.0
+    image: ${PORTAINER_AGENT_PROD_IMAGE:?Set an approved Portainer Agent image digest}
     container_name: portainer-agent-node3
     ports:
-      - "9001:9001"
+      - "${HOST_NODE3_IP:?Set approved private Node 3 IP}:9001:9001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes

@@ -1,5 +1,7 @@
 # Production Architecture Design — Multi-Host HA
 
+> [คู่มือติดตั้งและใช้งาน PROD ทีละโหนด](../PROD_INSTALLATION_AND_OPERATIONS_GUIDE.md) มีรายละเอียด host prerequisites, published-port matrix, ลำดับ bootstrap และเกณฑ์ตรวจรับ. ภาพ/ผังในเอกสารนี้เป็น target architecture จนกว่าจะมีผลทดสอบ multi-host จริง.
+
 ## 1. เป้าหมายและขอบเขต
 
 สถาปัตยกรรมเป้าหมายสำหรับ Production ใช้ ClickHouse 1 shard x 2 replicas และ
