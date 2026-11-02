@@ -4,9 +4,12 @@
 > **เอกสารคู่มือสำหรับ**: Data Engineers, ClickHouse Specialists, Platform Developers, และ AI Coding Agents  
 > **เกณฑ์มาตรฐานระบบ**: Ubuntu 24 LTS | ClickHouse 26.8 LTS | Docker Compose V2 | dbt-clickhouse | ควบคุมโดย [AGENTS.md](../AGENTS.md)
 
+> **UAT ที่ติดตั้งแล้ว:** ดู [คู่มือใช้งานทุกระบบบน UAT](UAT_USER_GUIDE.md) สำหรับการเข้าถึง 4 Portainer stacks, host ports, data flow และการเก็บหลักฐาน. ภาพ Stacks list ยืนยันรายการ stack ไม่ได้ยืนยัน health หรือ end-to-end test. คู่มือนี้เน้นการแก้โค้ดและการทดสอบบน sandbox/UAT.
+
 ---
 
 ## สารบัญ (Table of Contents)
+0. [คู่มือใช้งานทุกระบบบน UAT](UAT_USER_GUIDE.md)
 1. [ภาพรวมสถาปัตยกรรมและหลักการวิศวกรรม (Architecture Principles)](#1-ภาพรวมสถาปัตยกรรมและหลักการวิศวกรรม)
 2. [การเตรียมสภาพแวดล้อมเพื่อการพัฒนา (Local Development Setup)](#2-การเตรียมสภาพแวดล้อมเพื่อการพัฒนา)
 3. [กฎการออกแบบฐานข้อมูลและ Schema ใน ClickHouse](#3-กฎการออกแบบฐานข้อมูลและ-schema-ใน-clickhouse)
@@ -35,7 +38,7 @@
 
 แพลตฟอร์มนี้สร้างขึ้นตามรูปแบบ **Lakehouse + ClickHouse Acceleration** โดยมีหลักการสำคัญที่นักพัฒนาทุกคนต้องยึดถือ:
 1. **แยก Storage ออกจาก Compute (Decoupled Architecture)**:
-   - Object Storage (S3 / MinIO) จัดเก็บข้อมูลดิบ (Landing/Bronze) และประวัติย้อนหลังในรูปแบบ **Apache Parquet**
+   - Object Storage (S3 / MinIO) เป็นเป้าหมายสำหรับ Landing/Bronze และประวัติย้อนหลังในรูปแบบ **Apache Parquet**; sample ingestion ปัจจุบันยังไม่เขียน Parquet ไป S3
    - ClickHouse รับหน้าที่ประมวลผล OLAP สำหรับ Silver/Gold และ Serving Layer
 2. **Medallion Architecture Separation**:
    - `raw`: เก็บข้อมูลดิบตามต้นทาง (Source-aligned, Append-only)
@@ -63,7 +66,11 @@ cd Enterprise-Data-Lakehouse-Platform
 # 2. คัดลอก Environment File
 cp .env.example .env
 
-# 3. เริ่มการทำงานของ Stack การพัฒนา
+# 3. สร้าง external networks และเตรียม custom images ก่อนเริ่ม stack
+docker network create lakehouse-uat-integration
+docker network create lakehouse-uat-observability
+
+# 4. เริ่มการทำงานของ Core + Observability
 # Linux / macOS:
 ./scripts/manage.sh start
 
@@ -71,15 +78,17 @@ cp .env.example .env
 .\scripts\manage.ps1 start
 ```
 
+ตั้ง credentials ที่ไม่ใช่ค่า placeholder ใน approved local/secret source และเตรียม `*_UAT_IMAGE` ก่อนเริ่ม. `start` ไม่สร้าง external networks และ source/streaming เป็น Compose แยก. สำหรับ UAT Portainer ที่ติดตั้งแล้วให้ตรวจ stack เดิมตาม [UAT User Guide](UAT_USER_GUIDE.md#2-ตรวจสถานะและเข้าใช้งาน-4-portainer-stacks) แทนการสั่ง start ซ้ำ.
+
 ### 2.3 การเข้าถึงเซอร์วิสต่างๆ (Default Endpoints)
 | เซอร์วิส | URL | รหัสผ่านเริ่มต้น | หน้าที่ |
 |---|---|---|---|
 | **ClickHouse HTTP** | `http://localhost:18123` | ดูใน `.env` (`admin`) | ส่งคำสั่ง SQL ผ่าน Web/REST |
 | **ClickHouse Native** | `localhost:19000` | ดูใน `.env` (`admin`) | เชื่อมต่อผ่าน DBeaver, dbt, CLI |
-| **MinIO Console** | `http://localhost:19091` | ดูใน `.env` | ตรวจสอบไฟล์ Parquet ใน Lake |
+| **MinIO Console** | `http://localhost:19091` | ดูใน `.env` | ตรวจ bucket/objects จริง; sample loader ยังไม่เขียน Parquet |
 | **Grafana** | `http://localhost:13000` | ดูใน `.env` (`admin`) | แดชบอร์ดตรวจสอบสุขภาพระบบ |
 | **Prometheus** | `http://localhost:19093` | ไม่ต้องใช้ | เมทริกซ์และสถานะ Alert Rules |
-| **Portainer** | `https://localhost:9443` | กำหนดเมื่อเปิดครั้งแรก | จัดการ Containers ผ่าน Web UI |
+| **Portainer** | `<APPROVED_PORTAINER_URL>` | account องค์กร | จัดการ Git-backed Stacks ผ่าน management VPN; ไม่ได้อยู่ใน Core Compose |
 
 ---
 
@@ -161,6 +170,9 @@ WHERE _is_deleted = 0
 ```
 
 ### 4.3 การทดสอบและการรัน dbt
+
+ก่อนรัน ตรวจว่า custom dbt image มี `profiles.yml` ที่ใช้ environment variables สำหรับ credentials; repository มีเพียง [`profiles.yml.example`](../dbt/profiles.yml.example) และตัวอย่างระบุ cluster `cluster_1s_2r` ซึ่งต้องปรับสำหรับ UAT single-node. ตรวจ `dbt debug --profiles-dir .` ใน container ก่อน `dbt run`. `gold_sales_summary` เป็น dbt model แยกจาก `mart.fact_sales` ที่ serving MV ใช้ จึงต้องตรวจ lineage ของผลลัพธ์ตาม use case.
+
 ```bash
 # รัน dbt ผ่าน Containerized Runner (ไม่ต้องลง dbt ในเครื่อง)
 # Linux / macOS:
@@ -183,7 +195,7 @@ WHERE _is_deleted = 0
 3. `_ingested_at` (`DateTime64(3)`): เวลาที่บันทึกข้อมูลเข้าสู่ระบบ Lakehouse
 4. `_source_updated_at` (`DateTime64(3)`): เวลาที่มีการเปลี่ยนแปลงที่ระบบต้นทาง
 5. `_batch_id` (`String`): UUID ของรอบการนำเข้า (สำหรับ Audit & Replay)
-6. `_record_hash` (`FixedString(32)`): Checksum MD5/SHA256 สำหรับตรวจจับการเปลี่ยนแปลงของแถว
+6. `_record_hash` (`FixedString(32)`): ตัวอย่างใช้ค่า MD5 hex 32 อักขระสำหรับตรวจจับการเปลี่ยนแปลงของแถว; ไม่ใช่ cryptographic security control
 7. `_is_deleted` (`UInt8`): ตัวบ่งชี้การลบ (0 = คงอยู่, 1 = ถูกลบ)
 
 ### 5.2 การทดสอบรัน Sample Ingestion Pipeline
@@ -195,6 +207,8 @@ WHERE _is_deleted = 0
 # Windows:
 .\scripts\manage.ps1 ingest
 ```
+
+สคริปต์สร้าง orders ตัวอย่างและ insert เข้า `raw.orders_landing`/`mart.fact_sales` โดยตรง; ไม่อัปโหลด Parquet/JSON ไป S3 ตาม docstring และการรันซ้ำอาจเพิ่มข้อมูลซ้ำ. Python process บน host ไม่อ่าน `.env` โดยอัตโนมัติ. ต้องตั้ง environment ที่ตรงกับ UAT ก่อนรัน.
 
 ### 5.3 โครงสร้าง Modular Connector Framework (`ingestion/connectors/`)
 โครงการมีเฟรมเวิร์กตัวเชื่อมต่อมาตรฐานพร้อมระบบติดตามสถานะ (State Watermarking) ใน [ingestion/connectors/](../ingestion/connectors):
@@ -398,6 +412,8 @@ WHERE _is_deleted = 0
 - ข้อกำหนดคอลัมน์: ประเภทข้อมูล, ห้ามเป็น NULL, ช่วงค่าที่ยอมรับได้ (เช่น `unit_price > 0`), และค่า Enumeration (`COMPLETED`, `PENDING`, `CANCELLED`)
 
 ### 13.2 การตรวจสอบก่อนนำเข้าข้อมูล (Pre-Ingestion Gate)
+Validator เป็น CLI แยก ยังไม่ได้เรียกจาก sample loader, connector framework หรือ Kafka MV ทุก path. Contract อนุญาต `COMPLETED`/`PENDING`/`CANCELLED` ขณะที่ sample generator ยังสร้าง `PROCESSING`/`SHIPPED`; ต้องปรับให้ตรงกันก่อนบังคับ gate จริง.
+
 ```bash
 # ตรวจสอบความถูกต้องของข้อมูลเทียบกับ Data Contract
 ./scripts/manage.sh contract-validate
@@ -411,6 +427,8 @@ WHERE _is_deleted = 0
 ## 14. Lakehouse Open Formats: S3 Parquet & Apache Iceberg (Module M03/M04)
 
 ระบบรองรับการเชื่อมโยงข้อมูลแบบ **Open Lakehouse** ตามไฟล์ [sql/init/06_lakehouse_open_formats.sql](../sql/init/06_lakehouse_open_formats.sql):
+
+ไฟล์ `06` เป็น optional parameterized migration ไม่ได้อยู่ใน UAT image bootstrap; ต้องเตรียม S3 dataset/catalog, query parameters และทดสอบกับ ClickHouse version เป้าหมายก่อน apply.
 
 - **External S3 Parquet Table (`raw.ext_s3_orders_landing`)**:
   เปิดให้ ClickHouse อ่านไฟล์ Parquet บน MinIO/S3 ได้โดยตรงผ่านฟังก์ชัน `S3()` ช่วยให้ทีมวิเคราะห์รัน Ad-hoc Query บนข้อมูลดิบได้ทันทีโดยไม่ต้องผ่านกระบวนการโหลด (Zero-ETL Querying)
@@ -441,6 +459,8 @@ WHERE _is_deleted = 0
 ClickHouse 26.8 LTS รองรับการคำนวณเวกเตอร์หลายมิติด้วยฟังก์ชันเรขาคณิต `cosineDistance` และ `L2Distance` บนข้อมูลประเภท `Array(Float32)`:
 
 ระบบมีตัวอย่างการค้นหาความหมาย (Semantic Search) ใน [ai_assistant/vector_search.py](../ai_assistant/vector_search.py) สำหรับค้นหาคู่มือปฏิบัติการ (Runbook Search) และบริบทการดูแลระบบ:
+Implementation ปัจจุบันใช้ hash-based embeddings ในหน่วยความจำ ไม่ได้สร้างหรือ query ClickHouse vector table จริง; SQL ที่พิมพ์เป็น equivalent example.
+
 ```bash
 # ทดสอบค้นหาด้วยภาษาธรรมชาติ:
 ./scripts/manage.sh vector-demo "how to solve too many parts and replication lag"
@@ -455,7 +475,7 @@ ClickHouse 26.8 LTS รองรับการคำนวณเวกเตอ
 
 ระบบมีเซอร์วิสตรวจจับความผิดปกติของคุณภาพข้อมูลใน [data_quality/anomaly_detector.py](../data_quality/anomaly_detector.py) ซึ่งใช้โมเดลทางสถิติ (Z-Score และ Tukey's Interquartile Range - IQR) ในการประเมิน:
 - **Freshness Latency**: ตรวจสอบเวลาห่างจากข้อมูลล่าสุด หากล่าช้าเกินเกณฑ์ SLA (เช่น > 60 นาที) จะแจ้งเตือนระดับ CRITICAL
-- **Volume Anomalies**: ตรวจจับความผิดปกติของปริมาณข้อมูลในแต่ละแบตช์เทียบกับประวัติย้อนหลัง หากพบค่า Z-score เกิน $\pm 3.0$ หรืออยู่นอกช่วง IQR (Volume Drop / Volume Spike) จะหยุดท่อส่งข้อมูลทันที
+- **Volume Anomalies**: ฟังก์ชันตรวจปริมาณเทียบ Z-score/IQR; `run_suite()` ปัจจุบันใช้ค่า historical/scenario ที่ฝังใน code และ **ไม่ได้หยุด ingestion pipeline จริง**
 - **Revenue / KPI Drift**: ตรวจสอบการเบี่ยงเบนของตัวเลขธุรกิจสำคัญ เช่น ยอดขายรวมต่อวัน หากเบี่ยงเบนเกิน $2.5\sigma$ จากค่าเฉลี่ยประวัติศาสตร์
 
 ```bash
@@ -487,7 +507,7 @@ ClickHouse 26.8 LTS รองรับการคำนวณเวกเตอ
 
 ## 20. การตรวจสอบนโยบายทางวิศวกรรม (Policy-as-Code Linter - AGENTS.md Compliance)
 
-เพื่อรับประกันว่าโค้ดและคอนฟิกูเรชันทั้งหมดใน Repository สอดคล้องตามกฎบัตรความปลอดภัยและสถาปัตยกรรมใน [AGENTS.md](../AGENTS.md) 100% ระบบมี Policy Linter ใน [governance/policy_linter.py](../governance/policy_linter.py):
+เพื่อช่วยตรวจ guardrails บางข้อใน [AGENTS.md](../AGENTS.md) repository มี Policy Linter ใน [governance/policy_linter.py](../governance/policy_linter.py). ผลผ่านของ linter ไม่ใช่การรับรองว่าคอนฟิกและโค้ดสอดคล้องนโยบายทั้งหมด; ต้องมี validation และ human review ตามผลกระทบ:
 - **RULE-01 (Zero-Trust Secret)**: สแกนไฟล์ Compose, SQL, Python เพื่อป้องกันการ Hardcode รหัสผ่านหรือกุญแจลับ
 - **RULE-02 (Mandatory Metadata)**: ตรวจสอบตาราง Bronze/Silver ว่ามี Technical Metadata ครบทั้ง 7 คอลัมน์
 - **RULE-03 (Partition Key Rules)**: ตรวจสอบ DDL ว่าใช้ `toYYYYMM()` ไม่ใช้ High-cardinality columns ใน `PARTITION BY`
@@ -506,7 +526,7 @@ ClickHouse 26.8 LTS รองรับการคำนวณเวกเตอ
 
 ## 21. ชุดทดสอบรับรองระบบ 12 โมดูลแบบครอบคลุม (Master End-to-End Acceptance Suite)
 
-ก่อนการส่งมอบหรือ Release ขึ้น Production แพลตฟอร์มมีชุดทดสอบรับรองคุณภาพทั้ง 12 โมดูลใน [scripts/master_e2e_test.py](../scripts/master_e2e_test.py) ซึ่งจะทำการทดสอบตั้งแต่ M01 ถึง M12 พร้อมออกใบรับรองใน [docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md](ENTERPRISE_ACCEPTANCE_TEST_REPORT.md):
+ชุด [scripts/master_e2e_test.py](../scripts/master_e2e_test.py) ตรวจ M01–M12 แบบผสมระหว่าง import, static checks, simulation และ dry-run แล้วสร้าง [docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md](ENTERPRISE_ACCEPTANCE_TEST_REPORT.md). ผลผ่านของ suite **ไม่ใช่ใบรับรอง Production**, ไม่พิสูจน์ backup/restore, HA หรือ end-to-end integrations ที่ไม่ได้รันจริง:
 
 ```bash
 # รันชุดทดสอบรับรองระบบทั้งหมด:
@@ -532,7 +552,7 @@ ClickHouse 26.8 LTS รองรับการคำนวณเวกเตอ
 - [ ] มีการกำหนด Technical Metadata ครบทั้ง 7 คอลัมน์สำหรับตารางนำเข้าข้อมูล (`policy-lint` RULE-02)
 - [ ] มี dbt model และโมเดลเทสต์ที่เกี่ยวข้อง
 - [ ] ผ่านการตรวจสอบ Data Contract (`contract-validate`)
-- [ ] ผ่านการตรวจสอบความสอดคล้องนโยบายองค์กร 100% (`policy-lint`)
+- [ ] `policy-lint` ผ่านสำหรับกฎที่ script ตรวจ และมี human review สำหรับข้อกำหนดที่ script ไม่ครอบคลุม
 - [ ] ผ่านการทดสอบ Master Acceptance Suite 12/12 โมดูล (`master-test`)
 - [ ] อัปเดตเอกสารประกอบ, Data Catalog และ ADR หากมีการเปลี่ยนแปลงสถาปัตยกรรม
 

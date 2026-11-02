@@ -3,10 +3,12 @@
 ## Operational Principle
 > "A backup is not considered reliable until restore testing has been demonstrated with measured recovery evidence."
 
+**UAT implementation ปัจจุบัน:** [`backup_clickhouse.sh`](../scripts/backup_clickhouse.sh) สำรองทั้ง database `mart` ไป S3; [`restore_test.sh`](../scripts/restore_test.sh) restore เป็น database `drill_restore`, เปรียบเทียบเฉพาะ row count ของ `fact_sales` แล้วสั่ง `DROP DATABASE drill_restore`. SQL ตัวอย่างด้านล่างเป็น reference สำหรับการออกแบบ drill เพิ่มเติม **ไม่ใช่ output ที่ scripts รันอยู่**. ค่า default UAT ชี้ MinIO บน host เดียว จึงไม่ใช่ independent DR destination. ดู [คู่มือใช้งาน UAT](../docs/UAT_USER_GUIDE.md#13-backup-restore-และ-dr) และยืนยันว่า `drill_restore` ว่างก่อนรัน script; ตรวจ HTTP/SQL result และ object จริง เพราะข้อความ success จาก shell อย่างเดียวไม่เพียงพอ.
+
 ---
 
 ## 1. Automated Native Backup to S3
-ClickHouse 26.8 LTS supports native, non-blocking backups directly to S3-compatible object storage.
+ClickHouse 26.8 LTS supports native backups directly to S3-compatible object storage. ตัวอย่าง `async = false` ด้านล่างรอผลคำสั่ง; ต้องตรวจ result จาก ClickHouse จริง.
 
 ### Backup Command Syntax:
 ```sql
@@ -52,7 +54,7 @@ FROM S3(
 ```
 
 ### Step 3: Reconciliation & Integrity Check
-Run checksum reconciliation:
+Run row-count and revenue-total reconciliation (ยังไม่ใช่ checksum ของข้อมูลทุกแถว):
 ```sql
 SELECT
     (SELECT count() FROM mart.fact_sales) AS original_rows,

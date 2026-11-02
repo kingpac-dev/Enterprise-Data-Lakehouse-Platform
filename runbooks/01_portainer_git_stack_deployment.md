@@ -4,6 +4,8 @@
 [Runbook 04: Production Multi-Host Deployment](04_portainer_prod_deployment.md)
 ดูภาพรวมระบบที่ [UAT Architecture Design](../docs/architecture/UAT_ARCHITECTURE.md)
 
+> **สำหรับ UAT ที่ติดตั้งแล้ว:** ผู้ดูแลแจ้งว่ามี 4 stack entries ใน Portainer. ใช้ [คู่มือใช้งาน UAT](../docs/UAT_USER_GUIDE.md) ตรวจ containers, Git ref/image digest, endpoints และ data flow ก่อน. การเห็นชื่อ stack ใน UI ไม่ยืนยันว่าบริการ healthy. Runbook นี้ใช้เมื่อสร้าง stack ใหม่หรืออัปเดต/rollback ตาม change record; ไม่ต้อง redeploy เพื่อดูสถานะ.
+
 ## 1. ขอบเขต
 
 คู่มือนี้ใช้ติดตั้ง Enterprise Data Lakehouse Platform บน Ubuntu 24 LTS เครื่องเดียว

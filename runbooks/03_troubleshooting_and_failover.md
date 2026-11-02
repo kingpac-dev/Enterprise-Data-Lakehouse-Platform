@@ -1,5 +1,7 @@
 # Runbook 03: Troubleshooting & Failover Procedures
 
+> **UAT scope:** UAT เป็น single host ไม่มี ClickHouse replica/Keeper quorum ให้ failover. หัวข้อ replication/Keeper ด้านล่างใช้กับ production target ที่ผ่าน readiness gate เท่านั้น. สำหรับ 4 stacks ที่ติดตั้งใน UAT ให้ตรวจตาม [คู่มือใช้งาน UAT](../docs/UAT_USER_GUIDE.md), container health, network และ logs ก่อน. คำสั่ง `KILL QUERY`/`OPTIMIZE FINAL` หรือ restart ต้องมี operator review เพราะกระทบ workload.
+
 ## 1. Query Errors & Expensive Queries
 If `ClickHouseHighQueryErrors` alert fires:
 1. Inspect running and recent failed queries:

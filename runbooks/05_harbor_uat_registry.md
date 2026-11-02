@@ -1,6 +1,6 @@
 # Runbook 05: Harbor Registry สำหรับ UAT และ Portainer
 
-เอกสารนี้อธิบายการจัดเตรียม `harbor.kingpac-th.com` สำหรับ UAT แล้วเชื่อมต่อกับ
+เอกสารนี้อธิบายการจัดเตรียม `TBD_HARBOR_FQDN` สำหรับ UAT แล้วเชื่อมต่อกับ
 Portainer เพื่อให้ Git-backed Stacks pull custom images ได้
 
 > [!IMPORTANT]
@@ -14,7 +14,7 @@ Portainer เพื่อให้ Git-backed Stacks pull custom images ได�
 ## 1. Architecture และค่าที่ต้องอนุมัติ
 
 ```text
-GitHub -> Jenkins/CI -> Trivy/Harbor Scanner -> harbor.kingpac-th.com
+GitHub -> Jenkins/CI -> Trivy/Harbor Scanner -> TBD_HARBOR_FQDN
                                                    |
                                                    v
                                       Portainer -> UAT Docker Endpoint
@@ -22,7 +22,7 @@ GitHub -> Jenkins/CI -> Trivy/Harbor Scanner -> harbor.kingpac-th.com
 
 | Parameter | UAT value |
 |---|---|
-| Harbor FQDN | `harbor.kingpac-th.com` |
+| Harbor FQDN | `TBD_APPROVED_HARBOR_FQDN` |
 | Harbor host IP | `TBD` |
 | Harbor project | `lakehouse` |
 | HTTPS port | `443` |
@@ -56,7 +56,7 @@ Zone `kingpac-th.com` บริหารด้วย Cloudflare แต่ Cloudf
 | Proxy status | **DNS only** (เมฆสีเทา) |
 | TTL | `Auto` หรือตามมาตรฐานองค์กร |
 
-ค่า `Name=harbor` จะได้ FQDN เป็น `harbor.kingpac-th.com` โดยใช้ **DNS only** เป็นค่าเริ่มต้น
+ค่า `Name=harbor` จะได้ FQDN เป็น `TBD_HARBOR_FQDN` โดยใช้ **DNS only** เป็นค่าเริ่มต้น
 สำหรับ OCI/Docker Registry เนื่องจากการ push image เป็น request ขนาดใหญ่และอาจใช้เวลานาน
 Cloudflare Proxy มี request-size limit และ timeout ตาม plan จึงต้องทดสอบและอนุมัติแยกต่างหาก
 หากองค์กรต้องการเปิด Proxy (เมฆสีส้ม) หรือ Cloudflare Tunnel จริง ห้ามถือว่าสามารถใช้กับ
@@ -73,7 +73,7 @@ Public Cloudflare DNS ไม่ได้สร้าง route ไปยัง pr
 
 ```text
 Type: A
-Name: harbor.kingpac-th.com
+Name: TBD_HARBOR_FQDN
 Value: <HARBOR_PRIVATE_IP>
 Scope: corporate LAN/VPN only
 ```
@@ -94,10 +94,10 @@ Scope: corporate LAN/VPN only
 ตรวจ DNS และ TLS routing:
 
 ```bash
-getent hosts harbor.kingpac-th.com
-curl -fsS https://harbor.kingpac-th.com/api/v2.0/ping
-openssl s_client -connect harbor.kingpac-th.com:443 \
-  -servername harbor.kingpac-th.com </dev/null
+getent hosts TBD_HARBOR_FQDN
+curl -fsS https://TBD_HARBOR_FQDN/api/v2.0/ping
+openssl s_client -connect TBD_HARBOR_FQDN:443 \
+  -servername TBD_HARBOR_FQDN </dev/null
 ```
 
 รันคำสั่งจากทั้ง Jenkins runner และ UAT Docker endpoint เพื่อยืนยันว่า DNS resolution และ routing
@@ -129,7 +129,7 @@ sudo install -d -m 0750 /etc/harbor/tls
 ขอ certificate จาก Corporate PKI หรือ public CA โดย certificate ต้องมี SAN:
 
 ```text
-DNS:harbor.kingpac-th.com
+DNS:TBD_HARBOR_FQDN
 ```
 
 เพราะแนวทางหลักใช้ DNS-only ซึ่ง client เชื่อมต่อ Harbor โดยตรง ให้ใช้ certificate จาก public CA
@@ -165,7 +165,7 @@ sudo cp harbor.yml.tmpl harbor.yml
 แก้ `/opt/harbor/harbor.yml` โดยใช้ secret จริงที่มาจาก approved secret manager:
 
 ```yaml
-hostname: harbor.kingpac-th.com
+hostname: TBD_HARBOR_FQDN
 
 http:
   port: 80
@@ -194,13 +194,13 @@ sudo docker compose ps
 ตรวจว่า UI/API ตอบสนองและ TLS ถูกต้อง:
 
 ```bash
-curl -fsS https://harbor.kingpac-th.com/api/v2.0/ping
-sudo docker login harbor.kingpac-th.com
+curl -fsS https://TBD_HARBOR_FQDN/api/v2.0/ping
+sudo docker login TBD_HARBOR_FQDN
 ```
 
 ## 6. สร้าง Project และ Robot Accounts
 
-1. เปิด `https://harbor.kingpac-th.com`
+1. เปิด `https://TBD_HARBOR_FQDN`
 2. Login ด้วย Harbor administrator แล้ว rotate bootstrap password หากยังไม่ได้ทำ
 3. ไปที่ **Projects > New Project**
 4. สร้าง private project ชื่อ `lakehouse`
@@ -219,7 +219,7 @@ robot secret ตอนสร้างเพียงครั้งเดีย�
 บน approved CI runner หรือ controlled build host ให้กำหนด immutable release tag:
 
 ```bash
-REGISTRY=harbor.kingpac-th.com
+REGISTRY=TBD_HARBOR_FQDN
 PROJECT=lakehouse
 RELEASE_TAG=<APPROVED_RELEASE_TAG>
 
@@ -246,7 +246,7 @@ Jenkins ต้องใช้ robot account `ci-push`; ห้ามใช้ Har
 
 ```text
 Name: harbor-kingpac
-Registry URL: harbor.kingpac-th.com
+Registry URL: TBD_HARBOR_FQDN
 Authentication: enabled
 Username: <HARBOR_PORTAINER_PULL_ROBOT_USERNAME>
 Password: <HARBOR_PORTAINER_PULL_ROBOT_SECRET>
@@ -261,9 +261,9 @@ daemon บน UAT endpoint เชื่อถือก่อน
 ใช้ image variables ที่อ้าง release เดียวกัน ตัวอย่าง Core:
 
 ```dotenv
-CLICKHOUSE_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/clickhouse-uat:<APPROVED_RELEASE_TAG>
-DBT_RUNNER_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/dbt-runner-uat:<APPROVED_RELEASE_TAG>
-SERVING_API_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/serving-api-uat:<APPROVED_RELEASE_TAG>
+CLICKHOUSE_UAT_IMAGE=TBD_HARBOR_FQDN/lakehouse/clickhouse-uat:<APPROVED_RELEASE_TAG>
+DBT_RUNNER_UAT_IMAGE=TBD_HARBOR_FQDN/lakehouse/dbt-runner-uat:<APPROVED_RELEASE_TAG>
+SERVING_API_UAT_IMAGE=TBD_HARBOR_FQDN/lakehouse/serving-api-uat:<APPROVED_RELEASE_TAG>
 ```
 
 ตั้งค่า Stacks อื่นตาม Runbook 01 และใช้ immutable tag/digest เดียวกัน ห้ามใช้ `latest`
@@ -273,10 +273,10 @@ SERVING_API_UAT_IMAGE=harbor.kingpac-th.com/lakehouse/serving-api-uat:<APPROVED_
 รันจาก UAT Docker endpoint:
 
 ```bash
-getent hosts harbor.kingpac-th.com
-curl -fsS https://harbor.kingpac-th.com/api/v2.0/ping
+getent hosts TBD_HARBOR_FQDN
+curl -fsS https://TBD_HARBOR_FQDN/api/v2.0/ping
 sudo docker pull \
-  harbor.kingpac-th.com/lakehouse/clickhouse-uat:<APPROVED_RELEASE_TAG>
+  TBD_HARBOR_FQDN/lakehouse/clickhouse-uat:<APPROVED_RELEASE_TAG>
 ```
 
 ตรวจใน Harbor UI ว่ามี scan report, immutable release tag และ audit log ก่อน Deploy

@@ -4,9 +4,12 @@
 > **เอกสารคู่มือสำหรับ**: DevOps Engineers, Platform Engineers, SRE, DBAs, และ BI/Data Analysts  
 > **เกณฑ์มาตรฐานระบบ**: Ubuntu 24 LTS | ClickHouse 26.8 LTS | Portainer CE/EE | MinIO/S3 Lake | Prometheus & Grafana | ควบคุมโดย [AGENTS.md](../AGENTS.md)
 
+> **UAT ที่ใช้งานอยู่:** ผู้ดูแลแจ้งว่าติดตั้งแล้ว และภาพ Portainer แสดง 4 stack entries. สำหรับวิธีตรวจและใช้งานทุกระบบหลังติดตั้ง ให้เริ่มที่ [คู่มือใช้งาน UAT](UAT_USER_GUIDE.md). ภาพ Stack list ไม่ยืนยัน container health, data flow หรือผล backup/restore. ส่วน Production ในเอกสารนี้เป็น target design; ใช้ [Production readiness gate](../runbooks/04_portainer_prod_deployment.md) ก่อนดำเนินการใด ๆ.
+
 ---
 
 ## สารบัญ (Table of Contents)
+0. [คู่มือใช้งานทุกระบบบน UAT](UAT_USER_GUIDE.md)
 1. [ข้อกำหนดระบบและสถาปัตยกรรมเครือข่าย (System & Network Requirements)](#1-ข้อกำหนดระบบและสถาปัตยกรรมเครือข่าย)
 2. [การเตรียมเครื่องแม่ข่าย (Host Hardening & OS Setup)](#2-การเตรียมเครื่องแม่ข่าย)
 3. [การติดตั้งสภาพแวดล้อม DEV / UAT (Single-Host Installation)](#3-การติดตั้งสภาพแวดล้อม-dev--uat)
@@ -91,7 +94,7 @@ docker compose version
 
 ## 3. การติดตั้งสภาพแวดล้อม DEV / UAT
 
-สภาพแวดล้อม DEV/UAT รวมทุกเซอร์วิสไว้บนโหนดเดียวเพื่อความสะดวกรวดเร็วในการทดสอบและพัฒนา:
+สภาพแวดล้อม DEV/UAT แบ่งเป็น 4 Portainer stacks บน host เดียว. หากติดตั้ง UAT แล้ว ให้ใช้ [คู่มือ UAT หัวข้อ Portainer](UAT_USER_GUIDE.md#2-ตรวจสถานะและเข้าใช้งาน-4-portainer-stacks) ตรวจ Git ref, containers, networks และ endpoints; ขั้นตอนด้านล่างเป็นตัวอย่างการเตรียม host ใหม่. ก่อนรันต้องสร้าง external networks `lakehouse-uat-integration` และ `lakehouse-uat-observability`, ตั้ง credentials และเตรียม custom images ตาม [Runbook 01](../runbooks/01_portainer_git_stack_deployment.md).
 
 ```bash
 # 1. Clone repository
@@ -102,66 +105,27 @@ cd Enterprise-Data-Lakehouse-Platform
 cp .env.example .env
 nano .env
 
-# 3. สั่งรัน All-in-One DEV Stack
+# 3. เริ่มเฉพาะ Core Stack หลังเตรียม networks/images
 docker compose -f compose/docker-compose.dev.yml up -d
 
-# 4. ตรวจสอบสถานะ Container ทั้งหมด
+# 4. ตรวจ Core containers; source/streaming/observability เป็นคนละ Compose
 docker compose -f compose/docker-compose.dev.yml ps
 ```
 
 ทดสอบการเชื่อมต่อ ClickHouse:
 ```bash
 curl -s http://localhost:18123/ping
-# ผลลัพธ์ที่ถูกต้อง: Ok.
+# ผลที่คาด: Ok. เมื่อ endpoint พร้อมจริง
 ```
 
 ---
 
 ## 4. การติดตั้งสภาพแวดล้อม Production High Availability
 
-> [!IMPORTANT]
-> **Production HA ต้องการ 3 Host แยกจากกันโดยเด็ดขาด** (เช่น ต่าง Rack, ต่าง VM Host หรือคนละ Availability Zone) เพื่อให้ระบบทำงานต่อเนื่องได้แม้จะมีเครื่องใดเครื่องหนึ่งพังเสียหาย
+> [!CAUTION]
+> Production ยังเป็น **NOT READY FOR PRODUCTION** ตาม [Runbook 04](../runbooks/04_portainer_prod_deployment.md). คู่มือ UAT นี้ไม่ใช่คำสั่ง deploy Production. ต้องมีอย่างน้อย 3 failure domains ที่แยกกัน, Keeper quorum, ClickHouse 2 replicas, independent S3, approved secrets/network/TLS, image patch/digest และหลักฐาน load/failover/restore พร้อม human sign-off ก่อน promotion.
 
-```text
-┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
-│     PROD Host 01        │     │     PROD Host 02        │     │     PROD Host 03        │
-│ - ClickHouse Replica 01 │     │ - ClickHouse Replica 02 │     │ - Keeper Quorum 03      │
-│ - Keeper Quorum 01      │     │ - Keeper Quorum 02      │     │ - Portainer Agent       │
-│ - Portainer Agent       │     │ - Portainer Agent       │     └─────────────────────────┘
-└─────────────────────────┘     └─────────────────────────┘
-```
-
-### 4.1 การกำหนดค่า IP เครือข่าย (Multi-Host Network Routing)
-ในแต่ละเครื่องแม่ข่าย (Host 01, 02, 03) ให้คัดลอก `.env.example` เป็น `.env` และระบุ IP จริงของทั้ง 3 โหนด:
-```bash
-cp .env.example .env
-```
-กำหนดค่า IP ของทั้ง 3 เครื่องใน `.env`:
-```ini
-# Multi-Host Production HA Private IPs
-HOST_NODE1_IP=10.0.0.11   # IP ของ Host 01
-HOST_NODE2_IP=10.0.0.12   # IP ของ Host 02
-HOST_NODE3_IP=10.0.0.13   # IP ของ Host 03
-```
-คอนฟิกูเรชัน Compose แต่ละไฟล์ได้กำหนด `extra_hosts` และแมปพอร์ต `9009` (Interserver Replication), `9181` (Keeper Client), และ `9234` (Keeper Raft) ไว้เรียบร้อยแล้ว เพื่อให้โหนดสามารถสื่อสารข้ามเครื่องแม่ข่ายได้อย่างเสถียร
-
-### 4.2 ขั้นตอนการเปิดใช้งานแต่ละโหนด:
-1. **บน Host 01 (ClickHouse Replica 1 + Keeper 1)**:
-   ```bash
-   docker compose -f compose/docker-compose.prod-node1.yml up -d
-   ```
-2. **บน Host 02 (ClickHouse Replica 2 + Keeper 2)**:
-   ```bash
-   docker compose -f compose/docker-compose.prod-node2.yml up -d
-   ```
-3. **บน Host 03 (Keeper 3 Quorum Tie-Breaker)**:
-   ```bash
-   docker compose -f compose/docker-compose.prod-keeper3.yml up -d
-   ```
-4. **บน Management Host (สำหรับ Observability Stack)**:
-   ```bash
-   docker compose -f compose/docker-compose.observability.yml up -d
-   ```
+ดู [Production Architecture](architecture/PROD_ARCHITECTURE.md) สำหรับ topology เป้าหมาย และ [Runbook 04](../runbooks/04_portainer_prod_deployment.md) สำหรับ blocking gaps, network matrix, ลำดับตรวจและ approval gates. ค่า host IP/DNS, load balancer, enterprise S3, KMS, RPO/RTO ที่อนุมัติ และข้อมูลองค์กรอื่น ๆ ยังเป็น **TBD**; ไม่ใช้ IP ตัวอย่างหรือ UAT Compose เป็น Production configuration.
 
 ---
 
@@ -169,12 +133,14 @@ HOST_NODE3_IP=10.0.0.13   # IP ของ Host 03
 
 การควบคุมการปล่อยเวอร์ชัน (Deployment) ในระดับองค์กรจะดำเนินการผ่าน **Portainer Git-backed Stacks** เพื่อป้องกันการแก้ไขคอนฟิกแบบ Ad-hoc ที่ไม่ผ่านการตรวจสอบ:
 
+สำหรับ UAT ที่ติดตั้งแล้ว ให้เริ่มจาก [คู่มือ UAT](UAT_USER_GUIDE.md#2-ตรวจสถานะและเข้าใช้งาน-4-portainer-stacks) เพื่อตรวจ 4 stack entries, container health, Git reference และ image digest. ขั้นตอนด้านล่างใช้กับการสร้างหรืออัปเดต stack ตาม change record โดยผู้มีสิทธิ์เท่านั้น; อย่า redeploy เพียงเพื่อดูสถานะ.
+
 1. เข้าสู่หน้าเว็บ Portainer: `https://<portainer-host>:9443`
 2. เลือก Environment -> ไปที่เมนู **Stacks** -> กดปุ่ม **Add stack**
 3. เลือกหัวข้อ **Repository**:
    - **Repository URL**: `https://github.com/kingpac-dev/Enterprise-Data-Lakehouse-Platform.git`
-   - **Repository reference**: `refs/heads/main`
-   - **Compose path**: ระบุไฟล์ตามโหนด เช่น `compose/docker-compose.prod-node1.yml`
+   - **Repository reference**: approved immutable tag/SHA สำหรับ release นั้น
+   - **Compose path (UAT)**: `compose/docker-compose.dev.yml`, `compose/docker-compose.datasources.yml`, `compose/docker-compose.streaming.yml` หรือ `compose/docker-compose.observability.yml` ตาม stack
 4. ในส่วน **Environment variables**: เพิ่มตัวแปรความลับที่กำหนดไว้ใน `.env.example`
 5. เปิดใช้งาน **GitOps updates** (Webhook หรือ Polling)
 6. กด **Deploy the stack**
@@ -183,7 +149,7 @@ HOST_NODE3_IP=10.0.0.13   # IP ของ Host 03
 
 ## 6. การจัดการคลังข้อมูล S3 Object Storage
 
-ระบบใช้ Bucket มาตรฐานชื่อ `enterprise-data-lake` โดยแบ่งโครงสร้างโฟลเดอร์ดังนี้:
+ค่า template ของ UAT ใช้ bucket `enterprise-data-lake`; โครงสร้างด้านล่างเป็น **target path convention** ไม่ได้ยืนยันว่าทุก prefix มี object แล้ว. ตรวจรายการจริงใน MinIO Console ก่อนอ้างข้อมูล:
 ```text
 enterprise-data-lake/
 ├── landing/              # ข้อมูลดิบที่รับเข้าจาก API / Batch (Immutable)
@@ -203,7 +169,7 @@ enterprise-data-lake/
 1. เปิดโปรแกรม DBeaver -> New Database Connection -> เลือก **ClickHouse**
 2. ตั้งค่า Connection:
    - **Host**: `<clickhouse-host-ip>`
-   - **Port**: `8123` (HTTP Driver) หรือ `9000` (Native Driver)
+   - **Port จากภายนอก UAT Docker host**: `18123` (HTTP Driver) หรือ `19000` (Native Driver) ตามค่า Portainer environment; `8123`/`9000` เป็น container ports
    - **Database**: `mart` หรือ `serving`
    - **Username**: `bi_user` (สำหรับ BI) หรือ `admin`
    - **Password**: ตามที่กำหนดใน `.env`
@@ -214,7 +180,7 @@ import clickhouse_connect
 
 client = clickhouse_connect.get_client(
     host='localhost',
-    port=8123,
+    port=18123,
     username='bi_user',
     password='<password>',
     database='serving'
@@ -226,7 +192,7 @@ print(df.head())
 
 ### 7.3 การเชื่อมต่อผ่าน Power BI Desktop
 1. ใน Power BI Desktop เลือก **Get Data** -> ค้นหา **ODBC** หรือใช้ **ClickHouse Connector** จาก AppSource
-2. กำหนด Connection String หรือ DSN ชี้ไปยัง Port `8123`
+2. กำหนด Connection String หรือ DSN ชี้ไปยัง UAT host port `18123` (หรือ approved TLS proxy) ไม่ใช่ container port `8123`
 3. เลือก Database `serving` เพื่อดึงข้อมูลจาก Materialized Views
 
 ### 7.4 การให้บริการผ่าน Serving REST API Microservice (FastAPI)
@@ -241,10 +207,13 @@ print(df.head())
   ```
 - **OpenAPI Interactive Docs**: `http://<host>:18000/docs`
 - **Endpoints หลัก**:
-  - `GET /api/v1/sales/daily-summary?days=7`: ดึงยอดขายสรุปรายวันจาก Serving View (ความเร็วระดับ Sub-second)
+  - `GET /api/v1/sales/daily-summary?days=7`: ดึงยอดขายสรุปรายวันจาก Serving View; latency ต้องวัดจริงก่อนอ้างระดับ Sub-second
   - `GET /api/v1/sales/branch/{branch_id}`: ประสิทธิภาพยอดขายตามสาขา
   - `GET /api/v1/sales/top-products`: สินค้าขายดี 10 อันดับแรก
   - `GET /api/v1/metrics/data-quality`: ผลการกระทบยอด Data Quality ล่าสุด
+
+> [!IMPORTANT]
+> API profile `api` ไม่ได้รันโดยอัตโนมัติพร้อม Core. `/health` ตรวจเฉพาะ process; `/top-products` อ่าน `mart`/`core` แต่ role `api_user` ใน SQL init grant เฉพาะ `serving.*` จึงต้อง review สิทธิ์และทดสอบจริงก่อนเปิด endpoint.
 
 ---
 
@@ -266,7 +235,7 @@ print(df.head())
 ## 9. การตรวจติดตามระบบและการจัดการ Alert
 
 ### 9.1 แดชบอร์ด Grafana
-เข้าใช้งานที่ `http://<grafana-host>:3000` -> ไปที่โฟลเดอร์ **Lakehouse** -> เปิดแดชบอร์ด **ClickHouse Lakehouse Overview**:
+เข้าใช้งานผ่าน UAT host port `http://<UAT_HOST_OR_DNS>:13000` (หรือ approved TLS proxy) -> ตรวจ dashboard ที่ provision ตาม [Grafana config](../monitoring/grafana/). Port `3000` เป็นพอร์ตภายใน container:
 - ตรวจสอบ Throughput อัตราการรัน Query (QPS)
 - ตรวจสอบ Memory Tracking ของแต่ละโหนด
 - ตรวจสอบจำนวน Active Parts ของตารางใน MergeTree
@@ -276,7 +245,7 @@ print(df.head())
    - ตรวจสอบ `system.query_log` เพื่อหาคำสั่งที่ Error หรือ Syntax ผิด
 2. **`ClickHousePartsExplosion`** (>300 active parts):
    - มีการยิงคำสั่ง Insert ขนาดเล็กถี่เกินไป (Micro-batching)
-   - แก้ไขโดยเปิดใช้งาน `async_insert = 1` ที่ตัวส่งข้อมูล หรือสั่ง `OPTIMIZE TABLE ... FINAL`
+   - ตรวจ batch size/`async_insert = 1` ที่ตัวส่งข้อมูล; `OPTIMIZE TABLE ... FINAL` กระทบ I/O สูงและต้องให้ DBA review ก่อนใช้
 3. **`ClickHouseReplicationQueueLag`**: การ Sync ระหว่างโหนดล่าช้า
    - ตรวจสอบการเชื่อมต่อเครือข่ายระหว่างโหนด ClickHouse และตรวจสอบสุขภาพของ Keeper
 
@@ -285,25 +254,26 @@ print(df.head())
 ## 10. การสำรองข้อมูลและการซ้อมกู้คืนระบบฉุกเฉิน
 
 ### 10.1 การสำรองข้อมูลอัตโนมัติ (Automated Backup)
-ระบบตั้งการสำรองข้อมูล Native Backup ยิงตรงเข้าสู่ S3 โดยใช้สคริปต์ [scripts/backup_clickhouse.sh](../scripts/backup_clickhouse.sh):
+มีสคริปต์ [scripts/backup_clickhouse.sh](../scripts/backup_clickhouse.sh) สำหรับ `BACKUP DATABASE mart TO S3`. การมีสคริปต์ไม่ได้แปลว่ามี schedule หรือ backup สำเร็จแล้ว; UAT default ใช้ MinIO บน host เดียวซึ่งไม่ใช่ independent DR destination. ตรวจผล SQL/HTTP และ object จริงตาม [คู่มือ UAT](UAT_USER_GUIDE.md#13-backup-restore-และ-dr) ก่อนบันทึกว่าสำเร็จ:
 ```bash
 ./scripts/manage.sh backup
 ```
 
 ### 10.2 การซ้อมกู้คืนระบบฉุกเฉิน (Non-Destructive DR Drill)
-ต้องทำอย่างน้อยทุกไตรมาสเพื่อพิสูจน์ค่า **RPO <= 1 ชั่วโมง** และ **RTO <= 4 ชั่วโมง**:
+รอบการซ้อมต้องกำหนดตามนโยบายองค์กร; **RPO <= 1 ชั่วโมง** และ **RTO <= 4 ชั่วโมง** เป็น target รอ business owner sign-off และต้องวัดจริง:
 ```bash
 ./scripts/manage.sh restore-drill <backup_id>
 ```
-สคริปต์จะทำการกู้คืนข้อมูลไปยัง Database ทดสอบชั่วคราว เปรียบเทียบ Row Counts และผลรวม Checksum พร้อมทั้งจับเวลาการกู้คืนจริงโดยไม่ส่งผลกระทบต่อข้อมูล Production
+สคริปต์ restore `mart` ไป `drill_restore`, เทียบจำนวนแถวของ `fact_sales` และจับเวลาขั้น restore จากนั้นสั่ง `DROP DATABASE drill_restore`. **ไม่ได้เทียบ checksum** และชื่อ database drill เป็นค่าคงที่; ยืนยันว่าชื่อนี้ว่าง/แยกเฉพาะ drill ก่อนรัน. ห้ามใช้ script UAT นี้บน Production โดยไม่มีขั้นตอนและการอนุมัติแยก.
 
 ---
 
 ## 11. คู่มือการแก้ไขปัญหาที่พบบ่อย
 
 ### Q1: ClickHouse ขึ้นสถานะ Read-Only Table เกิดจากอะไร?
+หัวข้อนี้ใช้กับ replicated production target; UAT single-node ตาม Compose ปัจจุบันไม่มี Keeper quorum ให้ failover.
 **สาเหตุ**: ClickHouse ไม่สามารถติดต่อกับ ClickHouse Keeper ได้ หรือ Keeper สูญเสียเสียงส่วนใหญ่ใน Raft Quorum (มี Keeper รอดน้อยกว่า 2 ใน 3 โหนด)  
-**วิธีแก้ไข**: ตรวจสอบสถานะ Container Keeper ด้วยคำสั่ง `docker logs lakehouse-keeper-01` และรีสตาร์ทโหนด Keeper ที่ดับอยู่ เมื่อ Quorum กลับมาสมบูรณ์ ตารางจะปลดสถานะ Read-Only อัตโนมัติ
+**วิธีตรวจใน production ที่อนุมัติแล้ว**: ตรวจ `system.replicas`, Keeper quorum, network และ logs ตาม [Runbook 03](../runbooks/03_troubleshooting_and_failover.md). การ restart Keeper ต้องอยู่ใน incident/change process; ไม่ให้ทำจาก UAT guide นี้.
 
 ### Q2: อาการ "Too many parts in all data parts in table" แก้ไขอย่างไร?
 **สาเหตุ**: มีการบันทึกข้อมูลแบบแถวเดี่ยวๆ เข้ามาด้วยความถี่สูงเกินกว่าที่ Background Merge ของ ClickHouse จะรวมไฟล์ทัน  
@@ -326,9 +296,9 @@ cat orchestration/runs/<run_id>.json
 ```
 
 ### 12.2 การตั้งเวลาทำงานอัตโนมัติ (Cron / Systemd Timer)
-สำหรับเครื่องเซิร์ฟเวอร์ที่ไม่ได้ใช้ Airflow สามารถตั้ง System Cronjob ได้ที่ `/etc/cron.d/lakehouse-daily`:
+ตัวอย่างสำหรับเครื่องที่ไม่ได้ใช้ Airflow; repository ไม่ได้ติดตั้ง cron job นี้ให้. ต้องเตรียม environment/secrets, output retention, monitoring และอนุมัติ schedule ก่อนสร้าง `/etc/cron.d/lakehouse-daily`:
 ```cron
-# รัน Pipeline ประจำวันเวลา 02:00 น. UTC และส่ง Alert ไปยัง Slack Webhook
+# รัน Pipeline ประจำวันเวลา 02:00 น. UTC; webhook ต้องกำหนดแยก
 0 2 * * * root cd /opt/Enterprise-Data-Lakehouse-Platform && ./scripts/manage.sh run-pipeline >> /var/log/lakehouse-pipeline.log 2>&1
 ```
 
@@ -361,9 +331,9 @@ docker exec -it lakehouse-redpanda rpk group describe clickhouse_orders_consumer
 ก่อนขึ้นระบบ Production หรือเมื่อมีการขยายขนาดข้อมูล ต้องรันการทดสอบโหลดแบบหลายผู้ใช้งานพร้อมกัน:
 ```bash
 # ทดสอบโหลด 25 concurrent analytical users:
-./scripts/manage.sh stress-test 25
+./scripts/manage.sh stress-test --concurrency 25 --requests 10
 
-# ตรวจสอบ SLA:
+# ตัวเลขต่อไปนี้เป็นเกณฑ์ตัวอย่าง; ต้องอนุมัติและวัดกับ UAT workload จริง:
 # - Throughput (QPS) > 100
 # - Latency P95 <= 300 ms
 # - Error Rate = 0.0%
@@ -373,12 +343,12 @@ docker exec -it lakehouse-redpanda rpk group describe clickhouse_orders_consumer
 
 ## 15. การดูแลรักษา Data Catalog และ Lineage ใน CI/CD
 
-Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเอกสารมีชีวิต (Living Document) ที่ต้องซิงค์อัตโนมัติทุกครั้งที่มีการเปลี่ยน DDL หรือ dbt Model:
+Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเอกสารที่ต้องตรวจ diff เมื่อเปลี่ยน DDL หรือ dbt Model:
 ```bash
 # อัปเดตผัง Lineage และพจนานุกรมข้อมูลก่อนทำ Pull Request
 ./scripts/manage.sh generate-catalog
 ```
-คำสั่งนี้ถูกรันใน GitHub Actions CI เพื่อป้องกันไม่ให้ Catalog ล้าสมัย (Out of sync)
+CI ปัจจุบันใน [`ci.yml`](../.github/workflows/ci.yml) ยังไม่ได้รัน catalog generator; ผู้พัฒนาต้องรันและ review diff ก่อน commit หรือเพิ่ม CI gate ที่ผ่าน review.
 
 ---
 
@@ -389,6 +359,7 @@ Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเ�
 ```bash
 ./scripts/manage.sh finops-report
 ```
+ค่า default ของ analyzer ใช้ `localhost:8123` และหาก live query ไม่ได้จะ fallback เป็น simulation; สำหรับ UAT host ให้ระบุ `--port 18123`, account ที่อ่าน `system.query_log` ได้ และตรวจใน report ว่ามาจาก live data. ตัวเลข cost เป็น estimation ไม่ใช่ค่า billing จริง.
 ตรวจสอบ 3 จุดสำคัญ:
 1. **Unpartitioned Scans**: ค้นหา Query ที่สแกนข้อมูลเกิน 100 GB ในตาราง `fact_sales` โดยไม่มีเงื่อนไข `sale_date`
 2. **Memory Outliers**: ผู้ใช้หรือ Service ใดใช้หน่วยความจำเกิน 4 GB บ่อยครั้ง
@@ -399,15 +370,15 @@ Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเ�
 ## 17. การบังคับใช้ Data Contracts และการรับมือกับ Schema Drift
 
 ### 17.1 Pre-Ingestion Guard
-ก่อนนำเข้าข้อมูล Batch หรือ Streaming ทุกครั้ง จะต้องผ่านการตรวจสอบตามสัญญาข้อมูล [contracts/orders_contract.yml](../contracts/orders_contract.yml):
+ควรตรวจข้อมูลก่อนนำเข้าเทียบ [contracts/orders_contract.yml](../contracts/orders_contract.yml) แต่ validator ปัจจุบันเป็น CLI แยกและ **ยังไม่ได้บังคับกับ Batch/Streaming ทุก path**. คำสั่งไม่ใส่ `--data-file` จะทดสอบ sample cases เท่านั้น:
 ```bash
 ./scripts/manage.sh contract-validate
 ```
 
 ### 17.2 ขั้นตอนเมื่อเกิด Contract Violation
 1. หากพบข้อความ `[PASS - BLOCKED] Successfully intercepted contract violations`:
-   - ข้อมูลที่มีปัญหาจะถูกกักกัน (Quarantine) ไม่ให้โหลดเข้าสู่ `raw.orders_landing`
-   - ระบบจะส่ง Alert พร้อมรายละเอียดคอลัมน์ที่ผิดพลาดไปยัง Data Owner ทาง Slack
+   - หมายถึง validator ปฏิเสธ sample record ที่ผิดตามกฎใน process ทดสอบ; ยังไม่มี quarantine storage หรือ Slack alert ที่ต่อเข้ากับทุก ingestion path
+   - ให้ผู้ดูแลหยุด job ที่เกี่ยวข้อง ตรวจ payload ที่ sanitize แล้ว และบันทึก issue ให้ Data Owner
 2. หากเป็นการเปลี่ยนแปลงโครงสร้างที่ได้รับความเห็นชอบแล้ว (Approved Schema Evolution):
     - ทีม Data Engineer ต้องทำการอัปเดตเวอร์ชันของ Data Contract ใน `contracts/orders_contract.yml` (เช่น ขยับจาก `1.0.0` ไป `1.1.0`)
     - แก้ไข DDL ของ ClickHouse และ dbt models ให้สอดคล้องกัน ก่อนจะปล่อยให้ข้อมูลใหม่ไหลเข้าสู่ระบบ
@@ -425,7 +396,7 @@ Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเ�
   - `TABLE_IS_READ_ONLY (Code 242)`: ClickHouse Keeper สูญเสีย Raft Quorum หรือ Session ขาดหาย
   - `MEMORY_LIMIT_EXCEEDED (Code 241)`: Query ขนาดใหญ่ใช้หน่วยความจำเกิน Quota
   - `REPLICATION_LAG`: คิวการถ่ายโอนข้อมูลระหว่างโหนดช้าผิดปกติ
-- **Instant Remediation Actions**: แสดงลิงก์ไปยัง Runbook ที่เกี่ยวข้องใน [runbooks/](file:///c:/Users/supachai.nil/Documents/GitHub/Enterprise-Data-Lakehouse-Platform/runbooks) พร้อมคำสั่ง SQL สำหรับกู้สถานการณ์ฉุกเฉิน
+- **Runbook Suggestions**: แสดงแนวทาง/ลิงก์ไปยัง [runbooks/](../runbooks/) เพื่อให้ผู้ดูแลตรวจและตัดสินใจ; CLI ไม่แก้ปัญหาในระบบโดยอัตโนมัติ
 
 ### 18.2 คำสั่งการใช้งาน
 ```bash
@@ -443,7 +414,7 @@ Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเ�
 
 ## 19. การตรวจรับรองความพร้อมใช้งานระดับองค์กร (Master Acceptance Certification)
 
-ก่อนการส่งมอบระบบ (Sign-off), การทำ Disaster Recovery Audit, หรือการเปิดใช้งาน Production Stacks ต้องรันชุดทดสอบความสมบูรณ์แบบอัตโนมัติครบทั้ง 12 โมดูล (M01 ถึง M12) ผ่าน [scripts/master_e2e_test.py](../scripts/master_e2e_test.py):
+ใช้ [scripts/master_e2e_test.py](../scripts/master_e2e_test.py) เป็น static/dry-run regression suite สำหรับ M01–M12 ใน UAT. หลายข้อทดสอบเพียง import, การมีไฟล์ หรือ simulation; ผลผ่านไม่แทน live integration, DR drill หรือ Production readiness gate:
 
 ### 19.1 โมดูลที่ได้รับการตรวจสอบ (Acceptance Scope)
 1. **[M01] Source Connectivity**: ความพร้อมของ Connector (Postgres, S3 FileDrop, REST API, Base State)
@@ -467,4 +438,4 @@ Data Catalog ที่ [docs/DATA_CATALOG.md](DATA_CATALOG.md) เป็นเ�
 # บน Windows PowerShell:
 .\scripts\manage.ps1 master-test
 ```
-ผลการทดสอบจะถูกสรุปเป็นเอกสารรับรองอย่างเป็นทางการใน **[docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md](ENTERPRISE_ACCEPTANCE_TEST_REPORT.md)** เพื่อใช้อ้างอิงในกระบวนการ Enterprise Audit และ Human Approval Gate
+Script เขียนทับ **[docs/ENTERPRISE_ACCEPTANCE_TEST_REPORT.md](ENTERPRISE_ACCEPTANCE_TEST_REPORT.md)** ด้วยผลรอบที่รัน. เก็บ output วันที่/environment และแยกหลักฐาน live health, data quality, load, backup/restore และ security review ก่อน sign-off.
