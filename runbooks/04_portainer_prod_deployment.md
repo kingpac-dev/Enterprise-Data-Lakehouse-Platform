@@ -1,5 +1,7 @@
 # Runbook 04: Production Multi-Host Deployment ด้วย Portainer
 
+> หากเริ่มด้วย ClickHouse แบบ **1 Node** ให้ใช้ [คู่มือ PROD Single Node](../docs/PROD_SINGLE_NODE_INSTALLATION_GUIDE.md) และ [Compose เฉพาะ single node](../compose/docker-compose.prod-single.yml). การใช้งาน 1 Node ไม่มี HA และไม่ผ่านเกณฑ์ 3 failure domains ของ runbook นี้; การขยายภายหลังต้อง migration/replication review.
+
 > ขั้นตอนตั้งแต่ข้อกำหนด host, สถาปัตยกรรมเครือข่าย, Published Ports, ติดตั้ง/ตรวจรับทีละโหนดจนถึงเปิดใช้งานอยู่ใน [คู่มือ Production Installation & Operations](../docs/PROD_INSTALLATION_AND_OPERATIONS_GUIDE.md). ทั้งสองเอกสารใช้ gate เดียวกัน; Compose ปัจจุบันยังไม่ผ่าน gate สำหรับ production.
 
 เอกสารนี้สำหรับ **Production เท่านั้น** สำหรับ UAT Single Node ให้ใช้

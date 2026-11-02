@@ -1,0 +1,18 @@
+# Build from an organization-approved ClickHouse 26.8 patch and digest.
+# Example build input shape: registry.example/clickhouse-server:26.8.x.y@sha256:<digest>
+ARG CLICKHOUSE_BASE_IMAGE
+FROM ${CLICKHOUSE_BASE_IMAGE}
+
+# A single-node deployment must not inherit Keeper or 1S2R cluster config.
+COPY clickhouse/config.d/logging.xml /etc/clickhouse-server/config.d/logging.xml
+COPY clickhouse/config.d/network.xml /etc/clickhouse-server/config.d/network.xml
+COPY clickhouse/config.d/prometheus.xml /etc/clickhouse-server/config.d/prometheus.xml
+COPY clickhouse/config.d/storage_configuration.xml /etc/clickhouse-server/config.d/storage_configuration.xml
+COPY clickhouse/users.d/ /etc/clickhouse-server/users.d/
+
+# Initialize only local medallion objects and roles. Production source, Kafka,
+# ingestion and dbt objects are reviewed and deployed separately.
+COPY sql/init/01_databases.sql /docker-entrypoint-initdb.d/01_databases.sql
+COPY sql/init/02_medallion_tables.sql /docker-entrypoint-initdb.d/02_medallion_tables.sql
+COPY sql/init/03_materialized_views.sql /docker-entrypoint-initdb.d/03_materialized_views.sql
+COPY sql/init/04_rbac_and_row_policies.sql /docker-entrypoint-initdb.d/04_rbac_and_row_policies.sql
