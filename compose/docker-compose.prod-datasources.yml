@@ -1,0 +1,187 @@
+name: enterprise-lakehouse-prod-datasources
+
+# ==============================================================================
+# PROD Source Systems Stack
+# Production source databases for the Enterprise Data Lakehouse.
+# This single-host topology is NOT HA — see platform guardrails.
+# Deploy the core stack first so the shared integration network exists.
+#
+# Security:  All ports bind to PROD_BIND_IP (private interface only).
+# Governance: All custom images MUST be digest-pinned and published by
+#             the approved CI pipeline.
+# ==============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+
+networks:
+  integration:
+    external: true
+    name: ${INTEGRATION_NETWORK:-lakehouse-prod-integration}
+
+volumes:
+  source_postgres_data:
+  source_mysql_data:
+  source_mssql_data:
+  source_mongodb_data:
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Source
+  # ----------------------------------------------------------------------------
+  source-postgres:
+    image: ${SOURCE_POSTGRES_IMAGE:-postgres:16.6-alpine}
+    container_name: lakehouse-prod-source-postgres
+    environment:
+      POSTGRES_DB: ${SOURCE_POSTGRES_DB:-source_prod}
+      POSTGRES_USER: ${SOURCE_POSTGRES_USER:-source_app}
+      POSTGRES_PASSWORD: ${SOURCE_POSTGRES_PASSWORD:?Set SOURCE_POSTGRES_PASSWORD in Portainer}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "${PROD_BIND_IP:?Set private host IP}:${SOURCE_POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - source_postgres_data:/var/lib/postgresql/data
+    networks:
+      integration:
+        aliases: [source-postgres]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_POSTGRES_CPU_LIMIT:-2}"
+          memory: "${SOURCE_POSTGRES_MEMORY_LIMIT:-2G}"
+    logging: *default-logging
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # MySQL Source
+  # ----------------------------------------------------------------------------
+  source-mysql:
+    image: ${SOURCE_MYSQL_IMAGE:-mysql:8.4.3}
+    container_name: lakehouse-prod-source-mysql
+    environment:
+      MYSQL_DATABASE: ${SOURCE_MYSQL_DB:-source_prod}
+      MYSQL_USER: ${SOURCE_MYSQL_USER:-source_app}
+      MYSQL_PASSWORD: ${SOURCE_MYSQL_PASSWORD:?Set SOURCE_MYSQL_PASSWORD in Portainer}
+      MYSQL_ROOT_PASSWORD: ${SOURCE_MYSQL_ROOT_PASSWORD:?Set SOURCE_MYSQL_ROOT_PASSWORD in Portainer}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --require-secure-transport=OFF
+      - --binlog-format=ROW
+      - --server-id=1
+      - --log-bin=mysql-bin
+    ports:
+      - "${PROD_BIND_IP:?Set private host IP}:${SOURCE_MYSQL_PORT:-13306}:3306"
+    volumes:
+      - source_mysql_data:/var/lib/mysql
+    networks:
+      integration:
+        aliases: [source-mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root --password=$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_MYSQL_CPU_LIMIT:-2}"
+          memory: "${SOURCE_MYSQL_MEMORY_LIMIT:-2G}"
+    logging: *default-logging
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # SQL Server Source
+  # ----------------------------------------------------------------------------
+  source-mssql:
+    image: ${SOURCE_MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU16-ubuntu-22.04}
+    container_name: lakehouse-prod-source-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: ${SOURCE_MSSQL_EDITION:-Developer}
+      MSSQL_SA_PASSWORD: ${SOURCE_MSSQL_SA_PASSWORD:?Set SOURCE_MSSQL_SA_PASSWORD in Portainer}
+    ports:
+      - "${PROD_BIND_IP:?Set private host IP}:${SOURCE_MSSQL_PORT:-11433}:1433"
+    volumes:
+      - source_mssql_data:/var/opt/mssql
+    networks:
+      integration:
+        aliases: [source-mssql]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_MSSQL_CPU_LIMIT:-2}"
+          memory: "${SOURCE_MSSQL_MEMORY_LIMIT:-4G}"
+    logging: *default-logging
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # SQL Server Initializer (run-once; creates DB and app login)
+  # ----------------------------------------------------------------------------
+  source-mssql-init:
+    image: ${SOURCE_MSSQL_INIT_IMAGE:?Set SOURCE_MSSQL_INIT_IMAGE to a prebuilt registry image}
+    pull_policy: missing
+    container_name: lakehouse-prod-source-mssql-init
+    depends_on:
+      source-mssql:
+        condition: service_healthy
+    environment:
+      MSSQL_HOST: source-mssql
+      MSSQL_SA_PASSWORD: ${SOURCE_MSSQL_SA_PASSWORD:?Set SOURCE_MSSQL_SA_PASSWORD in Portainer}
+      MSSQL_DATABASE: ${SOURCE_MSSQL_DB:-source_prod}
+      MSSQL_APP_USER: ${SOURCE_MSSQL_USER:-source_app}
+      MSSQL_APP_PASSWORD: ${SOURCE_MSSQL_PASSWORD:?Set SOURCE_MSSQL_PASSWORD in Portainer}
+    networks:
+      - integration
+    logging: *default-logging
+    restart: "no"
+
+  # ----------------------------------------------------------------------------
+  # MongoDB Source
+  # ----------------------------------------------------------------------------
+  source-mongodb:
+    image: ${SOURCE_MONGODB_IMAGE:?Set SOURCE_MONGODB_IMAGE to a prebuilt registry image}
+    pull_policy: missing
+    container_name: lakehouse-prod-source-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${SOURCE_MONGODB_ROOT_USER:-mongo_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${SOURCE_MONGODB_ROOT_PASSWORD:?Set SOURCE_MONGODB_ROOT_PASSWORD in Portainer}
+      MONGO_INITDB_DATABASE: ${SOURCE_MONGODB_DB:-source_prod}
+      MONGO_APP_USER: ${SOURCE_MONGODB_USER:-source_app}
+      MONGO_APP_PASSWORD: ${SOURCE_MONGODB_PASSWORD:?Set SOURCE_MONGODB_PASSWORD in Portainer}
+    ports:
+      - "${PROD_BIND_IP:?Set private host IP}:${SOURCE_MONGODB_PORT:-17017}:27017"
+    volumes:
+      - source_mongodb_data:/data/db
+    networks:
+      integration:
+        aliases: [source-mongodb]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --host 127.0.0.1 --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --quiet --eval \"quit(db.adminCommand('ping').ok ? 0 : 2)\""]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SOURCE_MONGODB_CPU_LIMIT:-2}"
+          memory: "${SOURCE_MONGODB_MEMORY_LIMIT:-2G}"
+    logging: *default-logging
+    restart: unless-stopped
