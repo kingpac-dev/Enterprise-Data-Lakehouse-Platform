@@ -28,7 +28,9 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       CLICKHOUSE_BASE_IMAGE: ${{ vars.APPROVED_CLICKHOUSE_BASE_IMAGE }}
-      MINIO_SMOKE_IMAGE: ${{ vars.MINIO_SMOKE_IMAGE }}
+      # MINIO_SMOKE_IMAGE is optional until S3/MinIO is deployed for PROD.
+      # Restore when switching back to storage_configuration.xml
+      MINIO_SMOKE_IMAGE: ${{ vars.MINIO_SMOKE_IMAGE || '' }}
 
     steps:
       - name: Checkout approved source revision
@@ -51,14 +53,17 @@ jobs:
             echo 'APPROVED_CLICKHOUSE_BASE_IMAGE must pin a ClickHouse 26.8 patch and sha256 digest.' >&2
             exit 1
           fi
-          if [[ -z "${MINIO_SMOKE_IMAGE}" ]]; then
-            echo 'MINIO_SMOKE_IMAGE variable is not set in the production-images environment.' >&2
-            echo 'Set vars.MINIO_SMOKE_IMAGE to a digest-pinned MinIO image (e.g. docker.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:<digest>).' >&2
-            exit 1
-          fi
-          if [[ ! "${MINIO_SMOKE_IMAGE}" =~ @sha256:[a-f0-9]{64}$ ]]; then
-            echo 'MINIO_SMOKE_IMAGE must be pinned by sha256 digest.' >&2
-            exit 1
+          # MinIO smoke image is optional while PROD uses local-only storage.
+          # When S3 is deployed, restore the required validation below.
+          if [[ -n "${MINIO_SMOKE_IMAGE}" ]]; then
+            if [[ ! "${MINIO_SMOKE_IMAGE}" =~ @sha256:[a-f0-9]{64}$ ]]; then
+              echo 'MINIO_SMOKE_IMAGE must be pinned by sha256 digest.' >&2
+              exit 1
+            fi
+            echo 's3_smoke=true' >> "${GITHUB_OUTPUT}"
+          else
+            echo 'MINIO_SMOKE_IMAGE not set; S3 smoke test will be skipped.' >&2
+            echo 's3_smoke=false' >> "${GITHUB_OUTPUT}"
           fi
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image_ref="ghcr.io/${owner}/clickhouse-prod-single:${RELEASE_TAG}"
@@ -121,6 +126,7 @@ jobs:
           echo "Image confirmed in local daemon: $(docker image inspect --format '{{.Id}}' "${IMAGE_REF}")"
 
       - name: Pre-pull smoke-test dependencies
+        if: steps.release.outputs.s3_smoke == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -141,7 +147,85 @@ jobs:
           echo "Current value: ${MINIO_SMOKE_IMAGE}" >&2
           exit 1
 
-      - name: Smoke-test ClickHouse image
+      - name: Smoke-test ClickHouse image (local-only storage)
+        if: steps.release.outputs.s3_smoke != 'true'
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          clickhouse="prod-image-clickhouse-${suffix}"
+          admin_password="$(openssl rand -hex 24)"
+          cleanup() {
+            docker rm -f "${clickhouse}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          echo "--- Verifying local-only storage config (no S3 disk expected) ---"
+          s3_result=$(docker run --rm --entrypoint clickhouse \
+            --env CLICKHOUSE_USER=admin \
+            --env "CLICKHOUSE_PASSWORD=${admin_password}" \
+            --env CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 \
+            --env CLICKHOUSE_SKIP_USER_SETUP=1 \
+            --env "CLICKHOUSE_ADMIN_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_ETL_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_BI_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_API_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_MONITORING_PASSWORD=${admin_password}" \
+            --env CLICKHOUSE_S3_ENDPOINT= \
+            --env CLICKHOUSE_S3_ACCESS_KEY= \
+            --env CLICKHOUSE_S3_SECRET_KEY= \
+            --env S3_REGION=us-east-1 \
+            "${IMAGE_REF}" \
+            extract-from-config --config-file=/etc/clickhouse-server/config.xml \
+            --key=storage_configuration.disks.s3_cold.endpoint 2>/dev/null || true)
+          if [[ -n "${s3_result}" ]]; then
+            echo "::error::Image unexpectedly contains s3_cold disk config: ${s3_result}" >&2
+            exit 1
+          fi
+          echo "Confirmed: no s3_cold disk in image (local-only mode)."
+
+          echo "--- Starting ClickHouse with local-only storage ---"
+          docker run --detach --name "${clickhouse}" \
+            --ulimit nofile=262144:262144 \
+            --env CLICKHOUSE_USER=admin \
+            --env "CLICKHOUSE_PASSWORD=${admin_password}" \
+            --env CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 \
+            --env CLICKHOUSE_SKIP_USER_SETUP=1 \
+            --env "CLICKHOUSE_ADMIN_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_ETL_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_BI_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_API_PASSWORD=${admin_password}" \
+            --env "CLICKHOUSE_MONITORING_PASSWORD=${admin_password}" \
+            --env CLICKHOUSE_S3_ENDPOINT= \
+            --env CLICKHOUSE_S3_ACCESS_KEY= \
+            --env CLICKHOUSE_S3_SECRET_KEY= \
+            --env S3_REGION=us-east-1 \
+            "${IMAGE_REF}"
+          ready=false
+          for _ in $(seq 1 180); do
+            pid1="$(docker exec "${clickhouse}" sh -c 'tr "\000" " " < /proc/1/cmdline' 2>/dev/null || true)"
+            if [[ "${pid1}" == *clickhouse-server* ]] &&
+               docker exec "${clickhouse}" clickhouse-client --host 127.0.0.1 \
+                 --user admin --password "${admin_password}" --query 'SELECT 1' >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ready}" != true ]]; then
+            echo 'ClickHouse did not complete initialization or become ready.' >&2
+            docker logs "${clickhouse}" --tail 50 >&2
+            exit 1
+          fi
+          docker exec "${clickhouse}" clickhouse-client --host 127.0.0.1 \
+            --user admin --password "${admin_password}" \
+            --query 'SELECT currentUser(), version()'
+          echo "--- Local-only smoke test passed ---"
+
+      - name: Smoke-test ClickHouse image (with S3 storage)
+        if: steps.release.outputs.s3_smoke == 'true'
         shell: bash
         env:
           IMAGE_REF: ${{ steps.release.outputs.image_ref }}
