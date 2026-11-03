@@ -73,6 +73,16 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure default Docker buildx driver
+        shell: bash
+        run: |
+          # GitHub-hosted runners may pre-configure a docker-container driver
+          # whose --load behaviour silently fails to populate the local daemon.
+          # Force the default (docker) driver so --load works reliably.
+          docker buildx use default 2>/dev/null || true
+          echo "--- Active buildx builder ---"
+          docker buildx ls | head -10
+
       - name: Build image candidate
         shell: bash
         env:
@@ -86,6 +96,19 @@ jobs:
             --file clickhouse/Dockerfile.prod-single \
             --tag "${IMAGE_REF}" \
             --load .
+
+          # Fail fast if --load did not populate the local Docker daemon.
+          # Without this guard the smoke-test silently attempts a registry pull
+          # for an image that has not been pushed yet, producing a misleading
+          # "manifest unknown / access not authorized" error.
+          echo "--- Verifying image was loaded into local Docker daemon ---"
+          if ! docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
+            echo "::error::Image ${IMAGE_REF} was NOT loaded into the local Docker daemon." >&2
+            echo "Buildx driver state:" >&2
+            docker buildx ls >&2
+            exit 1
+          fi
+          echo "Image confirmed in local daemon: $(docker image inspect --format '{{.Id}}' "${IMAGE_REF}")"
 
       - name: Smoke-test ClickHouse image
         shell: bash
