@@ -29,10 +29,12 @@ services:
       CLICKHOUSE_BI_PASSWORD: ${CLICKHOUSE_BI_PASSWORD:?Inject BI credential}
       CLICKHOUSE_API_PASSWORD: ${CLICKHOUSE_API_PASSWORD:?Inject API credential}
       CLICKHOUSE_MONITORING_PASSWORD: ${CLICKHOUSE_MONITORING_PASSWORD:?Inject monitoring credential}
-      CLICKHOUSE_S3_ENDPOINT: ${CLICKHOUSE_S3_ENDPOINT:?Set approved independent S3 disk endpoint}
-      CLICKHOUSE_S3_ACCESS_KEY: ${CLICKHOUSE_S3_ACCESS_KEY:?Inject S3 access key}
-      CLICKHOUSE_S3_SECRET_KEY: ${CLICKHOUSE_S3_SECRET_KEY:?Inject S3 secret key}
-      S3_REGION: ${S3_REGION:?Set approved S3 region}
+      # S3 env vars are optional until MinIO/S3 is deployed for PROD.
+      # When S3 is ready, restore :? validation and switch Dockerfile to storage_configuration.xml
+      CLICKHOUSE_S3_ENDPOINT: ${CLICKHOUSE_S3_ENDPOINT:-}
+      CLICKHOUSE_S3_ACCESS_KEY: ${CLICKHOUSE_S3_ACCESS_KEY:-}
+      CLICKHOUSE_S3_SECRET_KEY: ${CLICKHOUSE_S3_SECRET_KEY:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
     volumes:
       - clickhouse_single_data:/var/lib/clickhouse
       - clickhouse_single_logs:/var/log/clickhouse-server

@@ -7,7 +7,9 @@ FROM ${CLICKHOUSE_BASE_IMAGE}
 COPY clickhouse/config.d/logging.xml /etc/clickhouse-server/config.d/logging.xml
 COPY clickhouse/config.d/network.xml /etc/clickhouse-server/config.d/network.xml
 COPY clickhouse/config.d/prometheus.xml /etc/clickhouse-server/config.d/prometheus.xml
-COPY clickhouse/config.d/storage_configuration.xml /etc/clickhouse-server/config.d/storage_configuration.xml
+# S3 storage config is available but requires MinIO/S3 to be deployed first.
+# When S3 is ready, switch back to: storage_configuration.xml
+COPY clickhouse/config.d/storage_configuration_local_only.xml /etc/clickhouse-server/config.d/storage_configuration.xml
 COPY clickhouse/users.d/ /etc/clickhouse-server/users.d/
 
 # Initialize only local medallion objects and roles. Production source, Kafka,

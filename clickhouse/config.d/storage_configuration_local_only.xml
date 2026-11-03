@@ -1,0 +1,32 @@
+<clickhouse>
+    <!--
+      Storage Configuration: Local-Only (No S3 Dependency)
+      =====================================================
+      Use this when S3/MinIO object storage is NOT yet deployed.
+      Only the default local NVMe/SSD disk is active.
+
+      When MinIO is deployed and validated:
+        1. Switch Dockerfile to COPY storage_configuration.xml instead
+        2. Restore required S3 env vars in docker-compose.prod-single.yml
+        3. Rebuild and redeploy the image
+        4. Verify with: SELECT name, path, type FROM system.disks
+    -->
+    <storage_configuration>
+        <disks>
+            <default>
+                <keep_free_space_bytes>10737418240</keep_free_space_bytes> <!-- 10 GB free space safety margin -->
+            </default>
+        </disks>
+
+        <policies>
+            <!-- Local-only policy: all data stays on default disk -->
+            <local_only>
+                <volumes>
+                    <main>
+                        <disk>default</disk>
+                    </main>
+                </volumes>
+            </local_only>
+        </policies>
+    </storage_configuration>
+</clickhouse>

@@ -1,0 +1,1 @@
+{ organization(login: "kingpac-dev") { packages(names: ["minio-smoke"], first: 1) { nodes { id name } } } }
