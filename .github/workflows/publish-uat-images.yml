@@ -52,6 +52,9 @@ jobs:
             context: monitoring/loki
             dockerfile: monitoring/loki/Dockerfile.uat
 
+    env:
+      MINIO_SMOKE_IMAGE: ${{ vars.MINIO_SMOKE_IMAGE }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -126,6 +129,34 @@ jobs:
             --load \
             "${{ matrix.context }}"
 
+      - name: Pre-pull smoke-test dependencies
+        if: matrix.image == 'clickhouse-uat'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${MINIO_SMOKE_IMAGE}" ]]; then
+            echo "::error::vars.MINIO_SMOKE_IMAGE is not set. Configure a digest-pinned MinIO image in repository variables." >&2
+            exit 1
+          fi
+          if [[ ! "${MINIO_SMOKE_IMAGE}" =~ @sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::MINIO_SMOKE_IMAGE must be pinned by sha256 digest." >&2
+            exit 1
+          fi
+          echo "--- Pulling MinIO smoke-test image ---"
+          echo "Source: ${MINIO_SMOKE_IMAGE}"
+          max_attempts=3
+          for attempt in $(seq 1 "${max_attempts}"); do
+            if docker pull "${MINIO_SMOKE_IMAGE}"; then
+              echo "MinIO image pulled successfully (attempt ${attempt})."
+              exit 0
+            fi
+            echo "Pull attempt ${attempt}/${max_attempts} failed. Retrying in 10s..." >&2
+            sleep 10
+          done
+          echo "::error::Failed to pull MinIO smoke-test image after ${max_attempts} attempts." >&2
+          echo "Current value: ${MINIO_SMOKE_IMAGE}" >&2
+          exit 1
+
       - name: Smoke-test image candidate
         shell: bash
         run: |
@@ -137,7 +168,7 @@ jobs:
               smoke_network="clickhouse-smoke-${smoke_suffix}"
               minio_container="clickhouse-smoke-minio-${smoke_suffix}"
               smoke_container="clickhouse-smoke-${smoke_suffix}"
-              minio_image="quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1"
+              minio_image="${MINIO_SMOKE_IMAGE}"
               clickhouse_s3_endpoint="http://${minio_container}:9000/validation/clickhouse_data/"
 
               cleanup_clickhouse_smoke() {
