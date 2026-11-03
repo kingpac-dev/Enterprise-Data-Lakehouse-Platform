@@ -81,9 +81,19 @@ Compose bind published ports กับ `PROD_BIND_IP` หรือ `HOST_NODE*_I
 
 ## 4. การ Build และ Push Image
 
-สำหรับเส้นทาง A ใช้ [publish-prod-images.yml](../.github/workflows/publish-prod-images.yml): `workflow_dispatch` จาก default branch, tag ใหม่รูปแบบ `prod-v<major>.<minor>.<patch>`, build จาก Dockerfile.prod-single, smoke test กับ MinIO ชั่วคราว, Trivy HIGH/CRITICAL gate แล้ว push `clickhouse-prod-single` ไป Harbor. Workflow **ไม่ได้ deploy** Portainer. ก่อนรัน ผู้ดูแล GitHub ต้องตั้ง environment `production-images` ให้มี required reviewers และจำกัด branch; ตั้ง variables `PROD_REGISTRY`, `PROD_IMAGE_NAMESPACE`, `APPROVED_CLICKHOUSE_BASE_IMAGE` (ClickHouse 26.8 patch พร้อม `@sha256:`) และ secrets `PROD_REGISTRY_USERNAME`, `PROD_REGISTRY_PASSWORD`. Harbor ต้อง enforce immutable `prod-v*` tags. ผู้อนุมัติตรวจ Git SHA, base digest และผล scan ที่เกิดจริง.
+สำหรับเส้นทาง A ใช้ [publish-prod-images.yml](../.github/workflows/publish-prod-images.yml): `workflow_dispatch` จาก default branch, tag ใหม่รูปแบบ `prod-v<major>.<minor>.<patch>`, build จาก Dockerfile.prod-single, smoke test กับ MinIO ชั่วคราว, Trivy HIGH/CRITICAL gate แล้ว push `ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single:<RELEASE_TAG>` ด้วย `GITHUB_TOKEN`. Workflow **ไม่ได้ deploy** Portainer. ก่อนรัน ผู้ดูแล GitHub ต้องตั้ง environment `production-images` ให้มี required reviewers และจำกัด branch; ตั้ง environment variable `APPROVED_CLICKHOUSE_BASE_IMAGE` (ClickHouse 26.8 patch พร้อม `@sha256:`). Job ต้องมีสิทธิ์ `packages: write`; package ที่มีอยู่แล้วต้องให้ repository นี้มี Actions write access. ผู้อนุมัติตรวจ Git SHA และ base digest ก่อนอนุมัติ job; Release/Security owner ตรวจผล smoke/scan จริงหลัง job เสร็จก่อนอนุมัติให้ใช้ digest.
 
-หลัง publish ให้ Release owner บันทึก **manifest digest ที่ registry คืนจริง** แล้วกำหนด `CLICKHOUSE_SINGLE_IMAGE=<REGISTRY>/<PROJECT>/clickhouse-prod-single@sha256:<64-hex>` ในช่องทาง config ที่อนุมัติ. Tag ไม่ใช่ค่า image สำหรับ Compose production. Build/smoke/scan ของ workflow ไม่ได้พิสูจน์ S3, network, backup หรือ workload บน host จริง.
+หาก job หยุดที่ **Validate release inputs and approved base image** ให้ผู้ดูแลเปิด repository **Settings → Environments → production-images** แล้วตรวจ **Environment variables** (ไม่ใช่กรอกในช่อง `release_tag`). Workflow ใช้ค่านี้เพียงรายการเดียว:
+
+| ชื่อ | ตำแหน่ง | รูปแบบที่รับ |
+| --- | --- | --- |
+| `APPROVED_CLICKHOUSE_BASE_IMAGE` | Environment variable | Approved ClickHouse `:26.8.x.y@sha256:<64-hex>` |
+
+ตรวจว่า environment มี required reviewers และ branch restriction เป็น default branch ก่อนรัน workflow ใหม่. `PROD_REGISTRY`, `PROD_IMAGE_NAMESPACE`, `PROD_REGISTRY_USERNAME` และ `PROD_REGISTRY_PASSWORD` ไม่จำเป็นสำหรับ workflow นี้แล้ว. GHCR tag อาจถูกเขียนทับได้; ขั้นตรวจ tag เดิมใน workflow เป็นเพียง best-effort และ deployment ต้องใช้ digest ที่ตรวจรับแล้ว. หาก package เป็น private ให้กำหนด pull access ให้ Portainer hosts ผ่านวิธีที่ Security owner อนุมัติ.
+
+การใช้ GHCR ตามคำขอ release นี้ต่างจาก CI/CD baseline `GitHub → Jenkins → Harbor → Trivy → Portainer` ใน [AGENTS.md](../AGENTS.md). ให้ Architecture/Security/Release owner ทบทวนและอนุมัติ registry และ package access ใน change record ก่อนถือเป็น production release; workflow นี้ยังไม่ใช่การอนุมัติ security exception.
+
+หลัง publish ให้ Release owner บันทึก **manifest digest ที่ GHCR คืนจริง** แล้วกำหนด `CLICKHOUSE_SINGLE_IMAGE=ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single@sha256:<64-hex>` ในช่องทาง config ที่อนุมัติ. Tag ไม่ใช่ค่า image สำหรับ Compose production. Build/smoke/scan ของ workflow ไม่ได้พิสูจน์ S3, network, backup หรือ workload บน host จริง.
 
 เส้นทาง B ยังไม่มี Dockerfile/pipeline ที่ทำ immutable image ครบทั้ง Keeper และ ClickHouse 1S2R. `CLICKHOUSE_PROD_IMAGE`, `KEEPER_PROD_IMAGE`, `PORTAINER_AGENT_PROD_IMAGE` ต้องมาจาก release/scan ที่อนุมัติพร้อม digest; **ห้าม**นำ image single-node ไปใช้แทน replicated build. ปิด P0-01 และ P0-08 ใน [worklist](PRODUCTION_READINESS_SPECIALIST_WORKLIST.md) ก่อนออก release.
 
@@ -192,7 +202,7 @@ Backup ต้องเขียนไป S3-compatible storage ที่ **แ�
 ทำเครื่องหมายเฉพาะเมื่อแนบหลักฐานจริงและมีผู้ตรวจทานแยกจากผู้จัดทำ; ช่องว่างหมายถึงยังไม่ผ่าน.
 
 - [ ] Host/NTP/capacity/Docker, DNS/private IP และ firewall positive/negative tests ผ่านบนทุก failure domain
-- [ ] Git SHA, image patch/digest, Harbor immutability, SBOM/Trivy scan และ TLS/CA/secret delivery ผ่าน review
+- [ ] Git SHA, image patch/digest, GHCR package permissions, tag uniqueness check, SBOM/Trivy scan และ TLS/CA/secret delivery ผ่าน review
 - [ ] Compose/XML/SQL parser และ policy checks ผ่านด้วย approved release/config; ไม่มี relative bind-mount blocker
 - [ ] 3 Keeper members มี quorum และ 2 ClickHouse replicas ใช้ replicated tables จริง; parity และ host-loss/rejoin ผ่าน
 - [ ] Source → S3/Parquet → raw → core → mart → serving, dbt tests, API RBAC และ reconciliation ผ่านด้วย approved workload

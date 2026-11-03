@@ -65,7 +65,7 @@ systemctl status ssh --no-pager
 
 ## 4. Release image และค่า environment
 
-ไฟล์ [publish-prod-images.yml](../.github/workflows/publish-prod-images.yml) เป็น workflow สำหรับ build, smoke-test, Trivy scan และ push `clickhouse-prod-single` ไป Harbor โดยสั่ง `workflow_dispatch` จาก default branch พร้อม `release_tag` รูปแบบ `prod-v<major>.<minor>.<patch>` เท่านั้น. ก่อนใช้งาน ให้ GitHub administrator ตั้ง environment ชื่อ `production-images` พร้อม **required reviewers** และจำกัด deployment branch เป็น default branch; ตั้ง environment variables `PROD_REGISTRY` (Harbor hostname), `PROD_IMAGE_NAMESPACE` (project/namespace) และ `APPROVED_CLICKHOUSE_BASE_IMAGE` (ClickHouse 26.8 patch พร้อม digest) รวมถึง environment secrets `PROD_REGISTRY_USERNAME` และ `PROD_REGISTRY_PASSWORD`. Harbor project ต้องมีกฎ immutable tag สำหรับ `prod-v*` และสิทธิ์ push ขั้นต่ำ. ผู้อนุมัติต้องตรวจ Git SHA, base-image digest และผล scan ก่อนอนุมัติ job. Workflow นี้เผยแพร่ image เท่านั้น; การนำ digest ไปใช้ใน Portainer ยังต้องผ่าน production readiness gate และ approval แยกต่างหาก.
+ไฟล์ [publish-prod-images.yml](../.github/workflows/publish-prod-images.yml) เป็น workflow สำหรับ build, smoke-test, Trivy scan และ push `ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single:<RELEASE_TAG>` ด้วย `GITHUB_TOKEN` โดยสั่ง `workflow_dispatch` จาก default branch พร้อม `release_tag` รูปแบบ `prod-v<major>.<minor>.<patch>` เท่านั้น. ก่อนใช้งาน ให้ GitHub administrator ตั้ง environment ชื่อ `production-images` พร้อม **required reviewers** และจำกัด deployment branch เป็น default branch; ตั้ง environment variable `APPROVED_CLICKHOUSE_BASE_IMAGE` (ClickHouse 26.8 patch พร้อม digest). Workflow ใช้ `packages: write`; package ที่มีอยู่แล้วต้องให้ repository นี้มี Actions write access. ผู้อนุมัติตรวจ Git SHA และ base-image digest ก่อนอนุมัติ job; Release/Security owner ตรวจผล smoke/scan จริงหลัง job เสร็จก่อนอนุมัติให้ใช้ digest. GHCR tag check เป็น best-effort; ให้ deploy ด้วย manifest digest ที่ตรวจรับแล้ว. หาก package เป็น private ต้องจัด pull access ให้ Portainer hosts ผ่านวิธีที่อนุมัติ. Workflow นี้เผยแพร่ image เท่านั้น; การนำ digest ไปใช้ใน Portainer ยังต้องผ่าน production readiness gate และ approval แยกต่างหาก.
 
 Pipeline ที่อนุมัติ build Dockerfile จาก repository root และ push ไป registry ที่มี scan/SBOM/review. `CLICKHOUSE_BASE_IMAGE` ต้องเป็น approved ClickHouse 26.8 **patch+digest**; tag เพียงอย่างเดียวใช้ไม่ได้. ตัวอย่างคำสั่งเชิงรูปแบบ (ไม่ใส่ secret):
 
@@ -73,11 +73,11 @@ Pipeline ที่อนุมัติ build Dockerfile จาก repository ro
 docker build \
   --build-arg CLICKHOUSE_BASE_IMAGE='<APPROVED_CLICKHOUSE_26_8_PATCH@sha256:DIGEST>' \
   -f clickhouse/Dockerfile.prod-single \
-  -t '<APPROVED_REGISTRY>/lakehouse/clickhouse-prod-single:<RELEASE>' .
-docker push '<APPROVED_REGISTRY>/lakehouse/clickhouse-prod-single:<RELEASE>'
+  -t 'ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single:<RELEASE>' .
+docker push 'ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single:<RELEASE>'
 ```
 
-หลัง push ให้ resolve digest ที่ registry และตั้ง `CLICKHOUSE_SINGLE_IMAGE=<REGISTRY>/lakehouse/clickhouse-prod-single@sha256:<64 hex>`. อย่านำ placeholder ในตัวอย่างไป build/pull จริง. `Dockerfile.prod-single` ใช้ local DDL เดิม; การใช้ `MergeTree` แบบไม่มี replication **ถูกต้องตามขอบเขต 1 Node** แต่ไม่รองรับ HA.
+หลัง push ให้ resolve digest ที่ GHCR และตั้ง `CLICKHOUSE_SINGLE_IMAGE=ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single@sha256:<64 hex>`. อย่านำ placeholder ในตัวอย่างไป build/pull จริง. `Dockerfile.prod-single` ใช้ local DDL เดิม; การใช้ `MergeTree` แบบไม่มี replication **ถูกต้องตามขอบเขต 1 Node** แต่ไม่รองรับ HA.
 
 | Env ที่ Portainer/secret manager ต้องส่ง | ค่า/ขอบเขต |
 | --- | --- |
