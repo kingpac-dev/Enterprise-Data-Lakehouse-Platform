@@ -225,3 +225,91 @@ Backup ต้องเขียนไป S3-compatible storage ที่ **แ�
 | Human Approval Required | ผู้อนุมัติ production promotion, destructive migration/restore, firewall/credential changes และ security exceptions |
 
 การแก้เอกสารรอบนี้ไม่มีผลต่อ Compose, SQL, volume หรือ live deployment. การใช้งานจริงยังขึ้นกับการปิด gate และ human sign-off ข้างต้น.
+
+## 1. ภาพรวมสถาปัตยกรรม
+
+### 1.1 Topology เปรียบเทียบ
+
+| รายการ | PROD Single Node | PROD Multi-Host HA |
+|---|---|---|
+| **Failure Domains** | 1 host | 3 hosts แยก failure domain |
+| **ClickHouse Replicas** | 1 instance (MergeTree) | 2 replicas (ReplicatedMergeTree) |
+| **ClickHouse Keeper** | ไม่มี | 3 members (Raft quorum) |
+| **High Availability** | ❌ ไม่มี | ✅ ทนต่อการล่มของ 1 node |
+| **Load Balancer** | ไม่จำเป็น | Internal TLS LB |
+| **Compose Files** | `docker-compose.prod-single.yml` | `prod-node1.yml` + `prod-node2.yml` + `prod-keeper3.yml` |
+| **Portainer Environments** | 1 environment | 3 environments |
+| **เหมาะสำหรับ** | เริ่มต้น foundation / งบจำกัด | Production จริงที่ต้องการ HA |
+
+### 1.2 PROD Single Node Topology
+
+```text
+┌─────────────────────────────────────────────┐
+│  Host 01 (Ubuntu 24 LTS)                    │
+│  ┌──────────────────────────────────────┐    │
+│  │ ClickHouse 26.8 LTS (Single)        │    │
+│  │ • raw / core / mart / serving       │    │
+│  │ • MergeTree (local, ไม่มี replica)  │    │
+│  │ • S3 cold disk (hot_to_cold policy) │    │
+│  └──────────────────────────────────────┘    │
+│  Published: 8123/9000/9363 → private IP     │
+│  Volumes: clickhouse_single_data/logs       │
+└─────────────────────────────────────────────┘
+         │ HTTPS
+    ┌────▼──────────────┐
+    │ Enterprise S3     │
+    │ (Lake + Backup)   │
+    └───────────────────┘
+```
+
+### 1.3 PROD Multi-Host HA Topology
+
+```text
+┌─── Failure Domain 1 ──┐  ┌─── Failure Domain 2 ──┐  ┌─── Failure Domain 3 ──┐
+│ Host 01                │  │ Host 02                │  │ Host 03                │
+│ ┌───────────────────┐  │  │ ┌───────────────────┐  │  │ ┌───────────────────┐  │
+│ │ Keeper 01         │  │  │ │ Keeper 02         │  │  │ │ Keeper 03         │  │
+│ │ (9181/9234)       │  │  │ │ (9181/9234)       │  │  │ │ (Tie-breaker)     │  │
+│ └───────────────────┘  │  │ └───────────────────┘  │  │ │ (9181/9234)       │  │
+│ ┌───────────────────┐  │  │ ┌───────────────────┐  │  │ └───────────────────┘  │
+│ │ ClickHouse 01     │  │  │ │ ClickHouse 02     │  │  │                        │
+│ │ Replica 1         │◄─┼──┼─│ Replica 2         │  │  │ (ไม่มี ClickHouse)    │
+│ │ 8123/9000/9009    │──┼──┼─►                   │  │  │                        │
+│ │ 9363              │  │  │ │ 8123/9000/9009    │  │  └────────────────────────┘
+│ └───────────────────┘  │  │ │ 9363              │  │
+└────────────────────────┘  │ └───────────────────┘  │
+                            └────────────────────────┘
+         ▲                           ▲
+         └───── Internal TLS LB ─────┘
+                    ▲
+            BI / API / ETL
+```
+
+### 1.4 Medallion Data Architecture
+
+```text
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────────┐
+│   raw    │───►│   core   │───►│   mart   │───►│   serving    │
+│ (Bronze) │    │ (Silver) │    │ (Gold)   │    │ (Views/MVs)  │
+│ Landing  │    │ Cleansed │    │ Facts &  │    │ Pre-aggregated│
+│ tables   │    │ Dedup    │    │ Dims     │    │ API-ready     │
+└──────────┘    └──────────┘    └──────────┘    └──────────────┘
+```
+
+### 1.5 Network & Port Matrix (PROD Multi-Host)
+
+| Port | Protocol | Source → Destination | หน้าที่ | Zone |
+|---:|---|---|---|---|
+| `9181` | TCP | ClickHouse ↔ Keeper 01-03 | Keeper client | Private backend |
+| `9234` | TCP | Keeper 01-03 ↔ Keeper 01-03 | Raft peer (leader election) | Private backend |
+| `9009` | TCP | ClickHouse 01 ↔ ClickHouse 02 | Interserver replication | Private backend |
+| `8123` | TCP | Internal LB → ClickHouse 01-02 | HTTP API | Data platform |
+| `9000` | TCP | Trusted BI/ETL → ClickHouse 01-02 | Native TCP protocol | Data platform |
+| `9363` | TCP | Prometheus → ClickHouse 01-02 | Metrics endpoint | Management |
+| `9001` | TCP | Portainer Server → Agents | Agent management | Management VPN |
+| `9443` | TCP | Management VPN → Portainer Server | Admin UI | Management VPN |
+| `443` | TCP (out) | ClickHouse → Enterprise S3 | Lake + backup storage | Egress |
+
+> ⛔ **ห้ามเปิด port ใดๆ สู่ Internet** — ทุก port ต้องจำกัดด้วย firewall/security groups
+
+---
