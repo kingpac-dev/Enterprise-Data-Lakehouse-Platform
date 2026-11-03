@@ -16,17 +16,42 @@
             <default>
                 <keep_free_space_bytes>107374182400</keep_free_space_bytes> <!-- 100 GB free space safety margin -->
             </default>
+            <!-- Separate local disk for cold volume (ClickHouse requires distinct disks per volume) -->
+            <cold_local>
+                <type>local</type>
+                <path>/var/lib/clickhouse/cold/</path>
+                <keep_free_space_bytes>107374182400</keep_free_space_bytes>
+            </cold_local>
         </disks>
 
         <policies>
-            <!-- Local-only policy: all data stays on default disk -->
-            <local_only>
+            <!--
+              Compatibility shim: same policy and volume names as the full
+              storage_configuration.xml so that DDL referencing
+              storage_policy='hot_to_cold' and TTL TO VOLUME 'cold'
+              works without modification.
+              hot  = default local disk
+              cold = cold_local disk (separate path, same physical storage)
+              When S3/MinIO is deployed, switch to storage_configuration.xml.
+            -->
+            <hot_to_cold>
                 <volumes>
-                    <main>
+                    <hot>
                         <disk>default</disk>
-                    </main>
+                    </hot>
+                    <cold>
+                        <disk>cold_local</disk>
+                    </cold>
                 </volumes>
-            </local_only>
+            </hot_to_cold>
+
+            <s3_only>
+                <volumes>
+                    <cold>
+                        <disk>cold_local</disk>
+                    </cold>
+                </volumes>
+            </s3_only>
         </policies>
     </storage_configuration>
 </clickhouse>
