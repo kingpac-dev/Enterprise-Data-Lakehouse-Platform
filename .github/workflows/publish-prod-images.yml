@@ -28,6 +28,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       CLICKHOUSE_BASE_IMAGE: ${{ vars.APPROVED_CLICKHOUSE_BASE_IMAGE }}
+      MINIO_SMOKE_IMAGE: ${{ vars.MINIO_SMOKE_IMAGE }}
 
     steps:
       - name: Checkout approved source revision
@@ -48,6 +49,15 @@ jobs:
           fi
           if [[ ! "${CLICKHOUSE_BASE_IMAGE}" =~ :26\.8\.[0-9]+\.[0-9]+@sha256:[a-f0-9]{64}$ ]]; then
             echo 'APPROVED_CLICKHOUSE_BASE_IMAGE must pin a ClickHouse 26.8 patch and sha256 digest.' >&2
+            exit 1
+          fi
+          if [[ -z "${MINIO_SMOKE_IMAGE}" ]]; then
+            echo 'MINIO_SMOKE_IMAGE variable is not set in the production-images environment.' >&2
+            echo 'Set vars.MINIO_SMOKE_IMAGE to a digest-pinned MinIO image (e.g. docker.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:<digest>).' >&2
+            exit 1
+          fi
+          if [[ ! "${MINIO_SMOKE_IMAGE}" =~ @sha256:[a-f0-9]{64}$ ]]; then
+            echo 'MINIO_SMOKE_IMAGE must be pinned by sha256 digest.' >&2
             exit 1
           fi
           owner="${GITHUB_REPOSITORY_OWNER,,}"
@@ -110,6 +120,27 @@ jobs:
           fi
           echo "Image confirmed in local daemon: $(docker image inspect --format '{{.Id}}' "${IMAGE_REF}")"
 
+      - name: Pre-pull smoke-test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "--- Pulling MinIO smoke-test image ---"
+          echo "Source: ${MINIO_SMOKE_IMAGE}"
+          max_attempts=3
+          for attempt in $(seq 1 "${max_attempts}"); do
+            if docker pull "${MINIO_SMOKE_IMAGE}"; then
+              echo "MinIO image pulled successfully (attempt ${attempt})."
+              exit 0
+            fi
+            echo "Pull attempt ${attempt}/${max_attempts} failed. Retrying in 10s..." >&2
+            sleep 10
+          done
+          echo "::error::Failed to pull MinIO smoke-test image after ${max_attempts} attempts." >&2
+          echo "Check that vars.MINIO_SMOKE_IMAGE in the production-images environment" >&2
+          echo "points to a publicly accessible, digest-pinned image." >&2
+          echo "Current value: ${MINIO_SMOKE_IMAGE}" >&2
+          exit 1
+
       - name: Smoke-test ClickHouse image
         shell: bash
         env:
@@ -120,7 +151,7 @@ jobs:
           network="prod-image-smoke-${suffix}"
           minio="prod-image-minio-${suffix}"
           clickhouse="prod-image-clickhouse-${suffix}"
-          minio_image='quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1'
+          minio_image="${MINIO_SMOKE_IMAGE}"
           access_key="smoke$(openssl rand -hex 12)"
           secret_key="$(openssl rand -hex 24)"
           admin_password="$(openssl rand -hex 24)"
