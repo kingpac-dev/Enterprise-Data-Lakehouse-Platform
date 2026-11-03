@@ -110,11 +110,26 @@ python3 governance/policy_linter.py
 ทดสอบให้ Docker host ดึง images จาก registries ได้ก่อนกด Deploy:
 
 ```bash
-sudo docker pull quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1
-sudo docker pull quay.io/minio/mc:RELEASE.2024-08-13T05-33-17Z@sha256:07c08763869bb18306d6f33a7e887c42211b1585a63c9098c9cf28b1b45b19aa
+sudo docker pull cgr.dev/chainguard/minio:latest@sha256:3c60a2a8c4d33409a9bc7a623a7fcbfb4605adc3d89422d2f53b3f673a6e5597
+sudo docker pull cgr.dev/chainguard/minio-client:latest-dev@sha256:39768db4c3fa811bc8f2e2a3e0add8ea391648b1c980de179985e1c353dc1805
 sudo docker pull clickhouse/clickhouse-server:26.8
 sudo docker pull rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
 ```
+
+The public `quay.io/minio/minio` and `quay.io/minio/mc` images now return HTTP 401.
+The Chainguard replacements above are pinned by immutable multi-architecture digests;
+`latest` and `latest-dev` are descriptive tags only. In Portainer, check the stack's
+`MINIO_IMAGE` and `MINIO_MC_IMAGE` variables before deployment: an old override takes
+precedence over the Compose defaults. Use an approved Git release ref that includes
+these changes, then pull both images on the Docker endpoint that Portainer manages.
+
+The replacement MinIO server runs as UID/GID `65532:65532`. A fresh named volume
+was tested locally, but an existing volume may still be owned by the previous
+image's user. Before promoting an existing deployment, the storage owner must
+verify a restorable backup, inspect volume ownership and write access, and approve
+any ownership migration. Do not remove or recreate the volume to fix permissions.
+The server also advances from the 2024 release to a 2026 release; validate data
+compatibility and a rollback/restore plan in UAT before production promotion.
 
 หากองค์กรบังคับใช้ approved private registry ให้ mirror images ที่ผ่านการ scan แล้ว
 และกำหนด `MINIO_IMAGE`/`MINIO_MC_IMAGE` เป็น approved registry references แทน ห้ามปิด TLS
@@ -287,8 +302,8 @@ CLICKHOUSE_API_PASSWORD=<STRONG_SECRET>
 CLICKHOUSE_MONITORING_PASSWORD=<STRONG_SECRET>
 S3_PORT=19090
 MINIO_CONSOLE_PORT=19091
-MINIO_IMAGE=quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1
-MINIO_MC_IMAGE=quay.io/minio/mc:RELEASE.2024-08-13T05-33-17Z@sha256:07c08763869bb18306d6f33a7e887c42211b1585a63c9098c9cf28b1b45b19aa
+MINIO_IMAGE=cgr.dev/chainguard/minio:latest@sha256:3c60a2a8c4d33409a9bc7a623a7fcbfb4605adc3d89422d2f53b3f673a6e5597
+MINIO_MC_IMAGE=cgr.dev/chainguard/minio-client:latest-dev@sha256:39768db4c3fa811bc8f2e2a3e0add8ea391648b1c980de179985e1c353dc1805
 S3_BUCKET_LAKE=enterprise-data-lake-uat
 S3_ACCESS_KEY=<MINIO_ROOT_USERNAME>
 S3_SECRET_KEY=<STRONG_UNIQUE_MINIO_ROOT_SECRET>
