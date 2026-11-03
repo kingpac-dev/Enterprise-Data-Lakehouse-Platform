@@ -67,6 +67,29 @@ systemctl status ssh --no-pager
 
 ไฟล์ [publish-prod-images.yml](../.github/workflows/publish-prod-images.yml) เป็น workflow สำหรับ build, smoke-test, Trivy scan และ push `ghcr.io/<GITHUB_OWNER_LOWERCASE>/clickhouse-prod-single:<RELEASE_TAG>` ด้วย `GITHUB_TOKEN` โดยสั่ง `workflow_dispatch` จาก default branch พร้อม `release_tag` รูปแบบ `prod-v<major>.<minor>.<patch>` เท่านั้น. ก่อนใช้งาน ให้ GitHub administrator ตั้ง environment ชื่อ `production-images` พร้อม **required reviewers** และจำกัด deployment branch เป็น default branch; ตั้ง environment variable `APPROVED_CLICKHOUSE_BASE_IMAGE` (ClickHouse 26.8 patch พร้อม digest). Workflow ใช้ `packages: write`; package ที่มีอยู่แล้วต้องให้ repository นี้มี Actions write access. ผู้อนุมัติตรวจ Git SHA และ base-image digest ก่อนอนุมัติ job; Release/Security owner ตรวจผล smoke/scan จริงหลัง job เสร็จก่อนอนุมัติให้ใช้ digest. GHCR tag check เป็น best-effort; ให้ deploy ด้วย manifest digest ที่ตรวจรับแล้ว. หาก package เป็น private ต้องจัด pull access ให้ Portainer hosts ผ่านวิธีที่อนุมัติ. Workflow นี้เผยแพร่ image เท่านั้น; การนำ digest ไปใช้ใน Portainer ยังต้องผ่าน production readiness gate และ approval แยกต่างหาก.
 
+### 4.1 หา patch และ digest จริงสำหรับ `APPROVED_CLICKHOUSE_BASE_IMAGE`
+
+**แยก image สองตัว:** ตัวแปรนี้คือ **base image จาก ClickHouse บน Docker Hub** ที่ `Dockerfile.prod-single` ใช้ใน `FROM`; ส่วน `ghcr.io/<owner>/clickhouse-prod-single` คือ **ผลลัพธ์หลัง build**. ห้ามนำ GHCR output digest มาใส่เป็น base image.
+
+1. ให้ DBA/Security owner เลือก ClickHouse **26.8 LTS patch** จาก [ประกาศเวอร์ชันและ security fix ของ ClickHouse](https://packages.clickhouse.com/) แล้วตรวจ tag ตรงกันใน [Docker Hub repository ของ ClickHouse](https://hub.docker.com/r/clickhouse/clickhouse-server/tags). อย่าใช้ floating tag เช่น `26.8`, `lts` หรือ `latest`. ณ **2026-11-03** หน้า ClickHouse ระบุ `26.8.36.3` เป็น 26.8 LTS patch ที่แก้ Critical vulnerability; `26.8.6.5` ใน UAT Dockerfile เป็น baseline เก่า ไม่ใช่เหตุผลให้เลือกใช้กับ PROD.
+2. จากเครื่องที่มี Docker Buildx และ network ไป Docker Hub ให้ตรวจ tag ที่เลือก (คำสั่งนี้อ่าน manifest จาก registry ไม่ได้ build หรือ push):
+
+   ```bash
+   docker buildx imagetools inspect clickhouse/clickhouse-server:26.8.36.3
+   ```
+
+   อ่าน `Digest: sha256:...` **บรรทัดบนสุด** ซึ่งเป็น digest ของ multi-platform index; ตรวจว่ามี `linux/amd64` สำหรับ Ubuntu host ที่อนุมัติ. อย่าคัดลอก digest ของ manifest ราย platform ใต้ `Manifests:` โดยไม่ตั้งใจ. ดู [Docker imagetools inspect reference](https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/).
+3. ผลตรวจจริงของ tag `26.8.36.3` เมื่อ **2026-11-03** ได้ top-level digest `sha256:d426d2f612e1e189c90f9a3f8dcd85a03c6851273833817a296bb327e63aa7a7` ตรงกันทั้ง Docker Buildx และ Docker Hub API. ค่าผู้สมัครที่ประกอบได้คือ:
+
+   ```text
+   clickhouse/clickhouse-server:26.8.36.3@sha256:d426d2f612e1e189c90f9a3f8dcd85a03c6851273833817a296bb327e63aa7a7
+   ```
+
+   **นี่เป็นค่าที่ตรวจพบ ไม่ใช่ค่าที่องค์กรอนุมัติแล้ว.** หากเลือก patch อื่น ต้องรันคำสั่งข้อ 2 ใหม่และใช้ digest ของ patch นั้น. ตรวจค่าที่ประกอบแล้วซ้ำด้วย `docker buildx imagetools inspect <IMAGE:PATCH@sha256:DIGEST>` และยืนยันว่า `Digest:` ตรงกัน.
+4. แนบ tag, top-level digest, source URL, วันที่ตรวจ, target platform, ผล scan/provenance ตามนโยบาย และ Git SHA ใน change record ให้ DBA/Security/Release owner อนุมัติ. การ `imagetools inspect` ยืนยัน manifest/digest **ไม่ใช่** vulnerability scan หรือ production sign-off.
+5. เมื่ออนุมัติแล้ว เปิด repository **Settings → Environments → production-images → Environment variables**; เพิ่ม/แก้ชื่อ `APPROVED_CLICKHOUSE_BASE_IMAGE` และวางค่าเต็มจากข้อ 3 หรือค่า patch ที่อนุมัติจริง **โดยไม่มีเครื่องหมาย quote/backtick/ช่องว่าง**. ตัวแปรนี้ไม่ใช่ secret; credential ของ registry (ถ้ามี) ต้องอยู่ใน secret management เท่านั้น. ตรวจ required reviewers และ branch restriction เป็น default branch.
+6. เริ่ม **Actions → Publish PROD Single-Node Image to GHCR → Run workflow** บน default branch ด้วย `release_tag` ใหม่. หลัง reviewer อนุมัติ job ให้ตรวจ build, smoke, Trivy และ published GHCR manifest digest จริงก่อนนำ digest ไปตั้ง `CLICKHOUSE_SINGLE_IMAGE` ใน Portainer. หาก step ใด fail ให้หยุดและแก้ตามผลจริง; อย่าสรุปว่า image ผ่านจากการมี digest เพียงอย่างเดียว.
+
 Pipeline ที่อนุมัติ build Dockerfile จาก repository root และ push ไป registry ที่มี scan/SBOM/review. `CLICKHOUSE_BASE_IMAGE` ต้องเป็น approved ClickHouse 26.8 **patch+digest**; tag เพียงอย่างเดียวใช้ไม่ได้. ตัวอย่างคำสั่งเชิงรูปแบบ (ไม่ใส่ secret):
 
 ```bash
