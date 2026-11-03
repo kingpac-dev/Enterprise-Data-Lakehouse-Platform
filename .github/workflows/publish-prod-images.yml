@@ -53,17 +53,23 @@ jobs:
             echo 'APPROVED_CLICKHOUSE_BASE_IMAGE must pin a ClickHouse 26.8 patch and sha256 digest.' >&2
             exit 1
           fi
-          # MinIO smoke image is optional while PROD uses local-only storage.
-          # When S3 is deployed, restore the required validation below.
-          if [[ -n "${MINIO_SMOKE_IMAGE}" ]]; then
+          # Detect whether the Dockerfile uses S3 storage or local-only.
+          # This is authoritative — no manual env var toggle needed.
+          if grep -q 'storage_configuration_local_only\.xml' clickhouse/Dockerfile.prod-single; then
+            echo 'Dockerfile uses local-only storage config; S3 smoke test will be skipped.'
+            echo 's3_smoke=false' >> "${GITHUB_OUTPUT}"
+          else
+            echo 'Dockerfile uses S3 storage config; S3 smoke test will run.'
+            if [[ -z "${MINIO_SMOKE_IMAGE}" ]]; then
+              echo 'MINIO_SMOKE_IMAGE variable is not set in the production-images environment.' >&2
+              echo 'Set vars.MINIO_SMOKE_IMAGE to a digest-pinned MinIO image.' >&2
+              exit 1
+            fi
             if [[ ! "${MINIO_SMOKE_IMAGE}" =~ @sha256:[a-f0-9]{64}$ ]]; then
               echo 'MINIO_SMOKE_IMAGE must be pinned by sha256 digest.' >&2
               exit 1
             fi
             echo 's3_smoke=true' >> "${GITHUB_OUTPUT}"
-          else
-            echo 'MINIO_SMOKE_IMAGE not set; S3 smoke test will be skipped.' >&2
-            echo 's3_smoke=false' >> "${GITHUB_OUTPUT}"
           fi
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image_ref="ghcr.io/${owner}/clickhouse-prod-single:${RELEASE_TAG}"
