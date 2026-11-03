@@ -14,7 +14,7 @@
     <storage_configuration>
         <disks>
             <default>
-                <keep_free_space_bytes>10737418240</keep_free_space_bytes> <!-- 10 GB free space safety margin -->
+                <keep_free_space_bytes>107374182400</keep_free_space_bytes> <!-- 100 GB free space safety margin -->
             </default>
         </disks>
 
