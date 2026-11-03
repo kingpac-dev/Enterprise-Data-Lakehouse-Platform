@@ -1,0 +1,52 @@
+name: enterprise-lakehouse-prod-single
+
+# Git-backed Portainer stack for one host. The image must be built from
+# clickhouse/Dockerfile.prod-single and published by the approved pipeline.
+# This topology has no host-level availability or Keeper quorum.
+networks:
+  data_backend:
+    driver: bridge
+
+volumes:
+  clickhouse_single_data:
+  clickhouse_single_logs:
+
+services:
+  clickhouse:
+    image: ${CLICKHOUSE_SINGLE_IMAGE:?Set approved single-node image digest}
+    container_name: lakehouse-clickhouse-prod-single
+    ports:
+      - "${PROD_BIND_IP:?Set approved private host IP}:8123:8123"
+      - "${PROD_BIND_IP:?Set approved private host IP}:9000:9000"
+      - "${PROD_BIND_IP:?Set approved private host IP}:9363:9363"
+    environment:
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:?Inject admin credential from approved secret management}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+      CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_ADMIN_PASSWORD:?Inject admin credential from approved secret management}
+      CLICKHOUSE_ETL_PASSWORD: ${CLICKHOUSE_ETL_PASSWORD:?Inject ETL credential}
+      CLICKHOUSE_BI_PASSWORD: ${CLICKHOUSE_BI_PASSWORD:?Inject BI credential}
+      CLICKHOUSE_API_PASSWORD: ${CLICKHOUSE_API_PASSWORD:?Inject API credential}
+      CLICKHOUSE_MONITORING_PASSWORD: ${CLICKHOUSE_MONITORING_PASSWORD:?Inject monitoring credential}
+      CLICKHOUSE_S3_ENDPOINT: ${CLICKHOUSE_S3_ENDPOINT:?Set approved independent S3 disk endpoint}
+      CLICKHOUSE_S3_ACCESS_KEY: ${CLICKHOUSE_S3_ACCESS_KEY:?Inject S3 access key}
+      CLICKHOUSE_S3_SECRET_KEY: ${CLICKHOUSE_S3_SECRET_KEY:?Inject S3 secret key}
+      S3_REGION: ${S3_REGION:?Set approved S3 region}
+    volumes:
+      - clickhouse_single_data:/var/lib/clickhouse
+      - clickhouse_single_logs:/var/log/clickhouse-server
+    networks:
+      - data_backend
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8123/ping || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+    stop_grace_period: 120s
+    restart: unless-stopped
