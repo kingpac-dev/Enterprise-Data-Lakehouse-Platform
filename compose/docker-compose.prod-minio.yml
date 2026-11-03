@@ -1,0 +1,107 @@
+name: enterprise-lakehouse-prod-minio
+
+# ==============================================================================
+# PROD S3-Compatible Object Storage (MinIO)
+# ==============================================================================
+# Independent stack for data lake storage. Deploy before switching ClickHouse
+# to storage_configuration.xml (S3 tiering).
+#
+# This single-host topology is NOT HA — see platform guardrails.
+# For HA: deploy MinIO in distributed mode across failure domains.
+#
+# Integration with ClickHouse:
+#   1. Deploy this stack first and verify MinIO is healthy
+#   2. Update ClickHouse Dockerfile to use storage_configuration.xml
+#   3. Set CLICKHOUSE_S3_ENDPOINT to http://prod-minio:9000/<bucket>/clickhouse_data/
+#   4. Rebuild ClickHouse image and redeploy
+#
+# Security: All ports bind to PROD_BIND_IP (private interface only).
+# ==============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+
+networks:
+  minio_backend:
+    driver: bridge
+  integration:
+    external: true
+    name: ${INTEGRATION_NETWORK:-lakehouse-prod-integration}
+
+volumes:
+  minio_prod_data:
+
+services:
+  # ----------------------------------------------------------------------------
+  # MinIO S3-Compatible Object Storage
+  # ----------------------------------------------------------------------------
+  minio:
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z@sha256:6f23072e3e222e64fe6f86b31a7f7aca971e5129e55cbccef649b109b8e651a1}
+    container_name: lakehouse-prod-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MinIO root user in Portainer}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MinIO root password in Portainer}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+      # Harden: disable browser-based anonymous access
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-}
+    ports:
+      # API port (S3 protocol) — ClickHouse connects here
+      - "${PROD_BIND_IP:?Set private host IP}:${MINIO_API_PORT:-19090}:9000"
+      # Console port (Web UI) — admin access only
+      - "${PROD_BIND_IP:?Set private host IP}:${MINIO_CONSOLE_PORT:-19091}:9001"
+    volumes:
+      - minio_prod_data:/data
+    networks:
+      minio_backend:
+        aliases: [prod-minio]
+      integration:
+        aliases: [prod-minio]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "${MINIO_CPU_LIMIT:-2}"
+          memory: "${MINIO_MEMORY_LIMIT:-4G}"
+        reservations:
+          memory: "${MINIO_MEMORY_RESERVATION:-2G}"
+    logging: *default-logging
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # Bucket Initializer (run-once)
+  # Creates the enterprise data lake bucket with private access policy.
+  # ----------------------------------------------------------------------------
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-quay.io/minio/mc:RELEASE.2024-08-13T05-33-17Z@sha256:07c08763869bb18306d6f33a7e887c42211b1585a63c9098c9cf28b1b45b19aa}
+    container_name: lakehouse-prod-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo '--- Initializing MinIO buckets for PROD ---';
+      mc alias set prodminio http://prod-minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing prodminio/$${S3_BUCKET_LAKE};
+      mc anonymous set none prodminio/$${S3_BUCKET_LAKE};
+      echo 'Bucket [$${S3_BUCKET_LAKE}] initialized with private access policy.';
+      echo '--- MinIO PROD initialization complete ---';
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MinIO root user in Portainer}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MinIO root password in Portainer}
+      S3_BUCKET_LAKE: ${S3_BUCKET_LAKE:-enterprise-data-lake}
+    networks:
+      - minio_backend
+    logging: *default-logging
+    restart: "no"
