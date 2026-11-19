@@ -1,0 +1,10 @@
+# Build from the reviewed KingPac Superset base image by digest.
+ARG INSIGHT_BASE_IMAGE
+FROM ${INSIGHT_BASE_IMAGE}
+USER root
+COPY insight/requirements-prod.txt /tmp/kingpac-requirements-prod.txt
+RUN uv pip install --no-cache-dir -r /tmp/kingpac-requirements-prod.txt && uv pip check
+COPY --chown=superset:superset insight/prod_config.py insight/prod_security.py /app/kingpac/
+ENV PYTHONPATH=/app/kingpac:/app/pythonpath
+ENV SUPERSET_CONFIG_PATH=/app/kingpac/prod_config.py
+USER superset

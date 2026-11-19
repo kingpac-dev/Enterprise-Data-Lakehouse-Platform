@@ -97,7 +97,7 @@ Network/Security owner จะอนุมัติ
    ให้ครบและทดสอบจริง
 7. TLS สำหรับ ClickHouse HTTP/native, interserver และ Keeper ยังต้องออกแบบ/อนุมัติ
 8. Load balancer/VIP และ health-check policy ยังเป็น `TBD`
-9. Production Data Sources และ Streaming topology ยังไม่มี approved Compose/IaC
+9. มี [Production Data Sources Compose candidate](../compose/docker-compose.prod-datasources.yml) แล้ว แต่เป็น single-host topology และยังไม่มีหลักฐานว่า topology, TLS, security และการ deploy ได้รับอนุมัติ; Production Streaming topology ยังต้องตรวจ approved Compose/IaC
 10. SQL init ยังใช้ local MergeTree/ReplacingMergeTree/AggregatingMergeTree; ต้องออกแบบ replicated tables, distributed DDL, backfill และพิสูจน์ replica parity ก่อนกล่าวอ้าง HA
 11. Node 1/2 Compose ยังรวม Keeper กับ ClickHouse ใน stack เดียว; ต้องจัด approved Git-backed Keeper-only/ClickHouse-only stages ก่อน bootstrap ทีละโหนด
 

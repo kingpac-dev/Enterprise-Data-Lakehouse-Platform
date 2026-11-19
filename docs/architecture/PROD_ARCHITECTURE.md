@@ -9,6 +9,10 @@ ClickHouse Keeper 3 members บน independent failure domains ระบบต�
 หรือ managed databases ที่อยู่นอก Lakehouse cluster ไม่ deploy UAT datasource containers
 บน ClickHouse hosts
 
+Repository มี [production datasource Compose candidate](../../compose/docker-compose.prod-datasources.yml) สำหรับ PostgreSQL, MySQL, SQL Server และ MongoDB ใน source zone ด้วย ไฟล์นี้เป็น topology แบบ single host และยังไม่ยืนยันว่า deploy หรือได้รับอนุมัติแล้ว จึงไม่ใช่หลักฐานว่า source systems มี HA. หากใช้ stack นี้จริง ให้ DBA/Platform กำหนด placement, TLS, HA และสิทธิ์ ingestion ตามนโยบายก่อนใช้งาน
+
+ชั้น Enterprise BI เป้าหมายใช้ Apache Superset ภายใต้ชื่อ **KingPac Enterprise Insight Platform**; ดู [BI Solution Architecture](KINGPAC_ENTERPRISE_INSIGHT_PLATFORM.md) สำหรับ metadata, cache, identity, data access และ production gates. แผนดังกล่าวยังไม่ใช่ deployment หรือหลักฐานว่า Superset/metadata/cache มี HA แล้ว
+
 ![Production Architecture Overview](../assets/architecture/prod-architecture-overview.png)
 
 > [!CAUTION]
@@ -36,7 +40,13 @@ flowchart LR
 
     s3[(Enterprise S3<br/>Lake + Independent Backups)]
     lb[Internal TLS Load Balancer]
-    clients[BI / APIs / Approved Consumers]
+    clients[BI Users]
+    apis[APIs / Approved Consumers]
+    bi_proxy[Trusted TLS Proxy / LB<br/>TBD]
+    bi[Superset BI Tier<br/>HA target / TBD]
+    bi_meta[(PostgreSQL HA<br/>metadata / TBD)]
+    bi_cache[(Redis HA<br/>cache / TBD)]
+    idp[Enterprise IdP / MFA<br/>TBD]
 
     subgraph fd1[Failure Domain 1]
       k1[Keeper 01]
@@ -71,19 +81,22 @@ flowchart LR
     k2 <--> k3
     k3 <--> k1
     ch1 & ch2 --> k1 & k2 & k3
-    clients --> lb --> ch1 & ch2
+    clients --> bi_proxy --> bi --> lb --> ch1 & ch2
+    apis --> lb
+    bi --> bi_meta & bi_cache
+    idp -. SSO target .-> bi
     port -. manages agents .-> fd1 & fd2 & fd3
     prom -. scrapes .-> ch1 & ch2 & k1 & k2 & k3
     prom --> graf
     loki --> graf
-    secrets -. injects credentials .-> ingest & fd1 & fd2
+    secrets -. injects credentials .-> ingest & fd1 & fd2 & bi
 ```
 
 ## 3. Ownership and Placement
 
 | Component | Placement | Owner |
 |---|---|---|
-| PostgreSQL/MySQL/SQL Server/MongoDB | Existing enterprise DB platforms or managed services | Application Owner / DBA |
+| PostgreSQL/MySQL/SQL Server/MongoDB | Existing enterprise DB platforms หรือ datasource Compose candidate ใน source zone; topology ที่ใช้จริง TBD | Application Owner / DBA |
 | Read replicas/CDC endpoints | Dedicated source-side infrastructure | DBA |
 | Ingestion/CDC workers | Dedicated ingestion zone, not ClickHouse hosts | Data Platform |
 | ClickHouse Replica 01 | Failure Domain 1 | Data Platform |
@@ -91,6 +104,8 @@ flowchart LR
 | Keeper 01-03 | One member per failure domain | Data Platform |
 | Enterprise S3 and backup | Independent storage service | Storage/Cloud Platform |
 | Portainer/Observability | Dedicated management zone | Platform/SRE |
+| Superset web/worker tier | Dedicated consumer zone across approved failure domains; TBD | BI Platform / SRE |
+| Superset metadata and cache | Separate HA services and independent backup; TBD | DBA / Platform |
 
 ## 4. Network Zones
 
@@ -137,6 +152,7 @@ Keeper ports `9181/9234`, interserver `9009`, metrics `9363` และ Portainer
 4. แยก/validate Keeper configuration สำหรับแต่ละ process/node
 5. กำหนด enterprise S3/KMS, TLS และ load balancer
 6. รัน multi-host connectivity, load, failover และ restore tests
+7. จัดทำและทดสอบ Superset HA, metadata/cache HA, SSO/MFA, per-user data isolation และ metadata backup/restore ตาม BI architecture
 
 สถานะปัจจุบัน: **NOT READY FOR PRODUCTION**
 

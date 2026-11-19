@@ -1,0 +1,9 @@
+# The dbt image uses dbt/ as its build context, so the root .dockerignore does not apply.
+**/__pycache__
+**/*.pyc
+target/
+logs/
+dbt_packages/
+.env
+.env.*
+*.env.local

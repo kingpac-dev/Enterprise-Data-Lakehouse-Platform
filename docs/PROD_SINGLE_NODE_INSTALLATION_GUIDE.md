@@ -1,5 +1,7 @@
 # คู่มือติดตั้ง Production ระยะที่ 1: ClickHouse 1 Node
 
+> [ทะเบียนกลุ่ม stack สำหรับ UAT และ single-node candidate](STACK_GROUPS_SINGLE_NODE.md) แสดง Compose paths, dependency และข้อควรระวังก่อนนำไปจัดใน Portainer. ตาม AGENTS.md ระบบ single-host จัดเป็น DEV/UAT และห้ามเปิดรับ production traffic
+
 **สถานะ: เห็น Ubuntu 24.04.1 ถึง console login แล้ว; ยังไม่มีผล host preflight หรือ live deployment ของ stack**  
 **Topology:** ClickHouse 1 instance บน Ubuntu 24 LTS, external S3-compatible storage, Git-backed Portainer stack. ไม่มี Keeper, replication, HA หรือ automatic failover. เมื่อจะขยายเป็น 3 failure domains ให้ใช้ [คู่มือ multi-host](PROD_INSTALLATION_AND_OPERATIONS_GUIDE.md) และ migration plan ที่ผ่าน review; ห้ามนำ image/stack ชุด single-node ไปเปลี่ยนชื่อเป็น HA.
 

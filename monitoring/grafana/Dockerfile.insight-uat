@@ -1,0 +1,13 @@
+# Extend the already-built UAT Grafana image so existing dashboards remain available.
+# Pass an approved immutable base image using --build-arg GRAFANA_BASE_IMAGE=...
+ARG GRAFANA_BASE_IMAGE
+FROM ${GRAFANA_BASE_IMAGE}
+
+USER root
+# A separate path avoids an existing /var/lib/grafana volume hiding the plugin.
+RUN mkdir -p /opt/kingpac-grafana-plugins \
+    && grafana-cli --pluginsDir /opt/kingpac-grafana-plugins plugins install grafana-clickhouse-datasource 4.14.0 \
+    && chown -R 472:0 /opt/kingpac-grafana-plugins
+COPY --chown=472:0 monitoring/grafana/insight-uat-datasource.yml /etc/grafana/provisioning/datasources/insight-clickhouse.yml
+ENV GF_PATHS_PLUGINS=/opt/kingpac-grafana-plugins
+USER 472

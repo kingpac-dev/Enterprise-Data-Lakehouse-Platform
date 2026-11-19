@@ -114,9 +114,11 @@ docker compose -f compose/docker-compose.dev.yml --profile tools run --rm dbt-ru
 | `GET /api/v1/metrics/data-quality` | รัน reconciliation เมื่อเรียก | ต้องเข้าถึง ClickHouse ได้ |
 | `GET /api/v1/metrics/cluster-stats` | system tables | query `query_signal` ต้องพิสูจน์บน ClickHouse version จริง |
 
-ทดสอบ `/health`, daily-summary และผล/HTTP status ของแต่ละ endpoint แยกกัน. API code เปิด CORS `*`; จำกัด exposure ผ่าน network/TLS/reverse proxy และ review role grants ก่อนให้ผู้ใช้งานนอกทีม. หลีกเลี่ยงการส่งรายละเอียด ClickHouse error ที่มีข้อมูลอ่อนไหวกลับ client ในระบบจริง.
+ทดสอบ `/health`, daily-summary และผล/HTTP status ของแต่ละ endpoint แยกกัน. Source รุ่นใหม่ปิด cross-origin โดย default; กำหนด `API_CORS_ALLOWED_ORIGINS` และ `API_CORS_ALLOW_CREDENTIALS` ตาม [Deployment Blueprint](architecture/KINGPAC_INSIGHT_DEPLOYMENT_BLUEPRINT.md) ก่อนใช้ browser client ข้าม origin. Container ที่ deploy ไว้ก่อนอาจยังใช้ image รุ่นเก่าซึ่งเปิด CORS `*`; ตรวจ image digest และ deploy history ก่อนสรุป configuration ที่ใช้อยู่. CORS ไม่ใช่ authentication: ต้องจำกัด exposure ผ่าน network/TLS/reverse proxy, เพิ่ม authentication/authorization และ review role grants ก่อนให้ผู้ใช้งานนอกทีม. หลีกเลี่ยงการส่งรายละเอียด ClickHouse error ที่มีข้อมูลอ่อนไหวกลับ client ในระบบจริง.
 
 ## 9. BI, DBeaver, Power BI และ SQL
+
+ชุด Apache Superset ที่เพิ่มใน repository เป็น UAT candidate; การมีไฟล์ไม่ได้ยืนยันว่าถูก deploy. ดู [Insight UAT Runbook](../runbooks/07_kingpac_insight_uat.md) สำหรับ build, dashboard และการตรวจสิทธิ์.
 
 ผู้ใช้งาน BI ใช้ `bi_user` ที่อ่าน `mart.*`/`serving.*` ตาม [RBAC SQL](../sql/init/04_rbac_and_row_policies.sql). ใน DBeaver/ODBC/Power BI ให้ใช้ **host port ของ UAT** (`18123` HTTP หรือ `19000` Native) ไม่ใช่ container port `8123`/`9000` เมื่อเชื่อมจากภายนอก Docker network. กำหนด TLS proxy/driver/DSN ตามนโยบายองค์กรและขอ credential จาก secret manager. เริ่มด้วย `serving.v_daily_branch_sales` และ `mart.fact_sales`; จำกัดช่วงวันที่และ `LIMIT` เพื่อไม่สร้าง full scan.
 
@@ -134,6 +136,7 @@ LIMIT 100;
 
 - **Prometheus:** ผ่าน approved host port `19093` เปิด **Status > Targets** ตรวจ `clickhouse-uat` และ `minio-uat` เป็น `UP` ตาม [scrape config](../monitoring/prometheus/prometheus.uat.yml). ตรวจ **Alerts** กับ [alert_rules.yml](../monitoring/prometheus/alert_rules.yml). บาง rule อ้าง Keeper/replication/backup metrics ที่อาจไม่มีใน UAT single-node; ตรวจ expression และ datasource จริง.
 - **Grafana:** ผ่าน host port `13000` เปิด dashboard ที่ provision ใน [monitoring/grafana](../monitoring/grafana/). ตรวจ datasource, time range, query และ panel data; panel ว่างไม่ได้แปลว่า ClickHouse ล้มเสมอ. ใช้ account ส่วนบุคคล/role ที่กำหนด.
+- **Grafana ClickHouse แบบ optional:** ใช้ image/override และ read-only account ตาม [Deployment Blueprint](architecture/KINGPAC_INSIGHT_DEPLOYMENT_BLUEPRINT.md); อย่าสมมติว่า datasource หรือ plugin นี้ติดตั้งและทดสอบแล้วบน UAT.
 - **Loki:** ผ่าน host port `13100` เป็น log backend; UAT Compose ยังไม่มี log shipper. การเห็น Loki container running ไม่ได้พิสูจน์ว่า log จาก ClickHouse/Redpanda/API ส่งเข้า Loki แล้ว. ตรวจ source/labels/query ก่อนอ้าง centralized logging.
 - **FastAPI metrics endpoints** เป็น on-demand queries ไม่ใช่ Prometheus scrape configuration ของ UAT. ตรวจสิทธิ์และ latency แยกจาก native ClickHouse metrics.
 
