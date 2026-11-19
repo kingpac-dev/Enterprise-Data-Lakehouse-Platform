@@ -46,6 +46,12 @@ flowchart LR
         loki[Loki<br/>13100 → 3100]
       end
 
+      subgraph bi[Optional Stack: kingpac-insight-uat]
+        superset[Superset<br/>127.0.0.1:18088 → 8088]
+        meta[PostgreSQL metadata<br/>private]
+        cache[Redis cache<br/>private]
+      end
+
       intnet[(lakehouse-uat-integration)]
       obsnet[(lakehouse-uat-observability)]
     end
@@ -53,6 +59,9 @@ flowchart LR
     users --> fw
     fw --> pg & my & ms & mo
     fw --> ch & api & rc & graf
+    users -->|Trusted TLS proxy, TBD| superset
+    superset --> intnet --> ch
+    superset --> meta & cache
     portainer -. manages .-> ds & stream & core & obs
     pg & my & ms & mo --> intnet --> jobs
     rp --> intnet --> ch
@@ -74,9 +83,11 @@ flowchart LR
 | Data Sources | UAT/DBA | PostgreSQL, MySQL, SQL Server, MongoDB | Integration |
 | Streaming | Data Platform | Redpanda log | Integration |
 | Observability | SRE | Prometheus, Grafana, Loki | Observability |
+| Insight BI (optional) | BI Platform | PostgreSQL metadata | Integration + private BI network |
 
 Platform/DevOps ต้องสร้าง shared external networks บน UAT Docker endpoint ก่อน จากนั้น
 deploy Core, Data Sources, Streaming และ Observability ตามลำดับ
+ชุด BI เป็น stack เพิ่มเติมหลัง Core พร้อมใช้งาน ดู [Insight UAT Runbook](../../runbooks/07_kingpac_insight_uat.md); ยังไม่ถือว่าถูกติดตั้งหรือทดสอบเพียงเพราะมี Compose file
 
 ## 4. Data Flow
 

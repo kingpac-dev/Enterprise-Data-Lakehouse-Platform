@@ -1,0 +1,68 @@
+name: kingpac-insight-prod
+
+# Deploy one web stack per approved Linux host. TLS proxy is host-local and external.
+# PostgreSQL HA, Redis TLS and Keycloak are external services, not managed here.
+x-prod-env: &prod-env
+  SUPERSET_CONFIG_PATH: /app/kingpac/prod_config.py
+  PYTHONPATH: /app/kingpac:/app/pythonpath
+  INSIGHT_SECRET_KEY_FILE: /run/secrets/superset_key
+  INSIGHT_METADATA_URI_FILE: /run/secrets/metadata_uri
+  INSIGHT_REDIS_URI_FILE: /run/secrets/redis_uri
+  INSIGHT_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_secret
+  INSIGHT_OIDC_ISSUER: ${INSIGHT_OIDC_ISSUER:?Set the HTTPS Keycloak issuer}
+  INSIGHT_OIDC_CLIENT_ID: ${INSIGHT_OIDC_CLIENT_ID:?Set the Keycloak client ID}
+  INSIGHT_OIDC_GROUP_VIEWER: ${INSIGHT_OIDC_GROUP_VIEWER:?Set the approved viewer group}
+  INSIGHT_OIDC_GROUP_AUTHOR: ${INSIGHT_OIDC_GROUP_AUTHOR:?Set the approved author group}
+  INSIGHT_OIDC_GROUP_ADMIN: ${INSIGHT_OIDC_GROUP_ADMIN:?Set the approved administrator group}
+  REQUESTS_CA_BUNDLE: /run/secrets/identity_ca
+  SUPERSET_BIND_ADDRESS: 127.0.0.1
+  SUPERSET_PORT: ${INSIGHT_PROD_PORT:?Set the host-local application port}
+  SERVER_WORKER_AMOUNT: ${INSIGHT_WEB_WORKERS:-2}
+  SERVER_THREADS_AMOUNT: ${INSIGHT_WEB_THREADS:-4}
+  GUNICORN_TIMEOUT: ${INSIGHT_GUNICORN_TIMEOUT:-60}
+
+x-prod-common: &prod-common
+  image: ${INSIGHT_PROD_IMAGE:?Set the approved production image by digest}
+  network_mode: host
+  read_only: true
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,mode=1777
+    - /app/superset_home:rw,nosuid,nodev,uid=1000,gid=1000,mode=1770
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  environment: *prod-env
+  secrets: [superset_key, metadata_uri, redis_uri, oidc_secret, metadata_ca, redis_ca, identity_ca]
+
+services:
+  web:
+    <<: *prod-common
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$$SUPERSET_PORT/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    stop_grace_period: 45s
+    restart: unless-stopped
+
+  maintenance:
+    <<: *prod-common
+    profiles: ["maintenance"]
+    command: ["superset", "db", "upgrade"]
+    restart: "no"
+
+secrets:
+  superset_key:
+    file: ${INSIGHT_PROD_SECRET_KEY_SOURCE:?Set the secret-manager rendered key path}
+  metadata_uri:
+    file: ${INSIGHT_PROD_METADATA_URI_SOURCE:?Set the metadata URI secret path}
+  redis_uri:
+    file: ${INSIGHT_PROD_REDIS_URI_SOURCE:?Set the Redis URI secret path}
+  oidc_secret:
+    file: ${INSIGHT_PROD_OIDC_SECRET_SOURCE:?Set the Keycloak secret path}
+  metadata_ca:
+    file: ${INSIGHT_PROD_METADATA_CA_SOURCE:?Set the PostgreSQL CA file path}
+  redis_ca:
+    file: ${INSIGHT_PROD_REDIS_CA_SOURCE:?Set the Redis CA file path}
+  identity_ca:
+    file: ${INSIGHT_PROD_IDENTITY_CA_SOURCE:?Set the Keycloak trust bundle path}

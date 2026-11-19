@@ -238,6 +238,8 @@ services:
       CLICKHOUSE_PORT_HTTP: 8123
       CLICKHOUSE_API_USER: api_user
       CLICKHOUSE_API_PASSWORD: ${CLICKHOUSE_API_PASSWORD:-change_this_api_password_in_prod}
+      API_CORS_ALLOWED_ORIGINS: ${API_CORS_ALLOWED_ORIGINS:-}
+      API_CORS_ALLOW_CREDENTIALS: ${API_CORS_ALLOW_CREDENTIALS:-false}
     networks:
       - data_backend
     restart: unless-stopped

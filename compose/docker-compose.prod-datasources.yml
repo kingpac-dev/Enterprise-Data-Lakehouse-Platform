@@ -6,7 +6,7 @@ name: enterprise-lakehouse-prod-datasources
 # This single-host topology is NOT HA — see platform guardrails.
 # Deploy the core stack first so the shared integration network exists.
 #
-# Security:  All ports bind to PROD_BIND_IP (private interface only).
+# Security:  Published ports bind to PROD_BIND_IP (private interface only).
 # Governance: All custom images MUST be digest-pinned and published by
 #             the approved CI pipeline.
 # ==============================================================================
@@ -27,8 +27,76 @@ volumes:
   source_mysql_data:
   source_mssql_data:
   source_mongodb_data:
+  insight_redis_data:
+
+# Defaults are placeholder paths so existing profiles remain configurable.
+# Supply secret-manager-rendered absolute paths before enabling insight-redis.
+secrets:
+  insight_redis_ca:
+    file: ${INSIGHT_REDIS_CA_SOURCE:-/run/kingpac-secrets/redis-ca.pem}
+  insight_redis_cert:
+    file: ${INSIGHT_REDIS_CERT_SOURCE:-/run/kingpac-secrets/redis-server.pem}
+  insight_redis_key:
+    file: ${INSIGHT_REDIS_KEY_SOURCE:-/run/kingpac-secrets/redis-server-key.pem}
+  insight_redis_acl:
+    file: ${INSIGHT_REDIS_ACL_SOURCE:-/run/kingpac-secrets/redis-users.acl}
+  insight_redis_health_password:
+    file: ${INSIGHT_REDIS_HEALTH_PASSWORD_SOURCE:-/run/kingpac-secrets/redis-health-password}
 
 services:
+  # Optional single-node Redis candidate. NOT HA; production approval required.
+  # TLS server authentication + Redis ACL; mTLS is not configured.
+  insight-redis:
+    profiles: ["insight-redis"]
+    image: ${INSIGHT_REDIS_IMAGE:-invalid.local/kingpac/redis:configure-approved-digest}
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "yes"
+      - --port
+      - "0"
+      - --tls-port
+      - "6379"
+      - --tls-cert-file
+      - /run/secrets/insight_redis_cert
+      - --tls-key-file
+      - /run/secrets/insight_redis_key
+      - --tls-ca-cert-file
+      - /run/secrets/insight_redis_ca
+      - --tls-auth-clients
+      - "no"
+      - --aclfile
+      - /run/secrets/insight_redis_acl
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "256mb"
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "${PROD_BIND_IP:?Set private host IP}:${INSIGHT_REDIS_PORT:-16379}:6379"
+    secrets: [insight_redis_ca, insight_redis_cert, insight_redis_key, insight_redis_acl, insight_redis_health_password]
+    volumes:
+      - insight_redis_data:/data
+    networks:
+      integration:
+        aliases: [insight-redis]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/insight_redis_health_password) redis-cli --tls --cacert /run/secrets/insight_redis_ca --user healthcheck -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -qx PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "${INSIGHT_REDIS_CPU_LIMIT:-1}"
+          memory: "${INSIGHT_REDIS_MEMORY_LIMIT:-512M}"
+    logging: *default-logging
+    restart: unless-stopped
+
   # ----------------------------------------------------------------------------
   # PostgreSQL Source
   # ----------------------------------------------------------------------------

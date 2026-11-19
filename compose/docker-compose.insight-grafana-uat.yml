@@ -1,0 +1,11 @@
+# Optional UAT override for the existing observability stack.
+# Merge with docker-compose.observability.yml; never use this HTTP path for PROD.
+services:
+  grafana:
+    image: ${GRAFANA_INSIGHT_UAT_IMAGE:?Set the prebuilt approved Insight Grafana UAT image}
+    environment:
+      GF_INSTALL_PLUGINS: ""
+      GF_PATHS_PLUGINS: /opt/kingpac-grafana-plugins
+      INSIGHT_GRAFANA_CH_HOST: ${INSIGHT_GRAFANA_CH_HOST:?Set the UAT ClickHouse host}
+      INSIGHT_GRAFANA_CH_USER: ${INSIGHT_GRAFANA_CH_USER:?Set a dedicated read-only user}
+      INSIGHT_GRAFANA_CH_PASSWORD: ${INSIGHT_GRAFANA_CH_PASSWORD:?Set the read-only user password}

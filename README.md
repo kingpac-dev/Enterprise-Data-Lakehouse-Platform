@@ -2,6 +2,8 @@
 
 > แพลตฟอร์มตัวอย่างสำหรับพัฒนาและทดสอบ data lakehouse บน ClickHouse, S3-compatible storage และ Docker Compose พร้อมแนวทางกำกับดูแลสำหรับการนำไปใช้ในองค์กร
 
+**KingPac Enterprise Insight Platform:** ชั้น BI บน Apache Superset สำหรับ Lakehouse นี้ มี [Solution Architecture](docs/architecture/KINGPAC_ENTERPRISE_INSIGHT_PLATFORM.md), [ADR](adr/0006-kingpac-enterprise-insight-platform.md), [PoC/acceptance plan](docs/implementation/KINGPAC_INSIGHT_POC_PLAN.md), [Deployment Blueprint](docs/architecture/KINGPAC_INSIGHT_DEPLOYMENT_BLUEPRINT.md), [UAT runbook](runbooks/07_kingpac_insight_uat.md) และ dashboard ตัวอย่าง. อ่าน [implementation status และผลตรวจจริง](docs/implementation/KINGPAC_INSIGHT_IMPLEMENTATION_STATUS.md); ชุดนี้ยังต้องผ่าน integration, security, data-owner และ restore validation ก่อนใช้งานจริง
+
 ![3D isometric overview of the lakehouse data flow](docs/assets/architecture/lakehouse-isometric-overview.png)
 
 *ภาพประกอบเชิงแนวคิด: source → ingestion → object storage → ClickHouse raw/core/mart/serving → API/BI; แถวบนคือเส้นทางส่งมอบซอฟต์แวร์ และแถวล่างคือ observability/backup. ภาพไม่ใช่แผนผังพอร์ตหรือการรับรอง HA; ใช้ topology ในเอกสารสถาปัตยกรรมเป็นแหล่งอ้างอิงสำหรับติดตั้งจริง*
@@ -392,6 +394,10 @@ agents/                       Engineering agent role definitions
 โครงการมี [ทะเบียนผู้เชี่ยวชาญ A00–A12](agents/README.md) พร้อมขอบเขตงาน ผู้ตรวจทานอิสระ และ Handoff Contract; บทบาทที่ขาดจาก baseline เดิม (A09 Documentation/ADR, A10 BI/Data Product, A11 Capacity/FinOps และ A12 API/AI Application) มี brief ที่เรียกใช้ได้ใน `agents/`. [แผนงาน Production Readiness](docs/PRODUCTION_READINESS_SPECIALIST_WORKLIST.md) จัด P0/P1 จากหลักฐานในโค้ด พร้อมเจ้าของ เกณฑ์ตรวจรับ ลำดับงาน และค่า `TBD` ที่ต้องให้เจ้าของระบบตัดสินใจ. การมีทีมและแผนงานยังไม่ใช่การรับรองว่า production พร้อมใช้งาน; อ่าน [production gate](runbooks/04_portainer_prod_deployment.md) ก่อนเสนอปล่อยระบบ.
 
 ## เอกสารประกอบ
+
+การจัดกลุ่ม stack แยก UAT และ single-node candidate: [Stack Groups และ Portainer inventory](docs/STACK_GROUPS_SINGLE_NODE.md) พร้อม [ทะเบียนกลุ่ม](compose/stack-groups.single-node.json) และ script ตรวจ service membership โดยไม่ deploy
+
+KingPac Enterprise Insight Platform: [architecture](docs/architecture/KINGPAC_ENTERPRISE_INSIGHT_PLATFORM.md), [implementation status](docs/implementation/KINGPAC_INSIGHT_IMPLEMENTATION_STATUS.md), [UAT runbook](runbooks/07_kingpac_insight_uat.md) และ [production candidate runbook](runbooks/08_kingpac_insight_production.md). Production candidate ยังต้องผ่าน security, data isolation, integration, recovery และ human approval gates ก่อนใช้งานจริง
 
 | หัวข้อ | เอกสาร |
 | --- | --- |

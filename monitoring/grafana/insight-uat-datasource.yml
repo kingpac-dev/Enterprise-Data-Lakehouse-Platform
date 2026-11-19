@@ -1,0 +1,21 @@
+# Optional UAT-only provisioning; Grafana expands $VARIABLE once at startup.
+# Access is limited by the supplied ClickHouse account, not by dashboard filters.
+apiVersion: 1
+datasources:
+  - name: KingPac ClickHouse UAT
+    uid: kingpac-clickhouse-uat
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: false
+    editable: false
+    version: 1
+    jsonData:
+      host: $INSIGHT_GRAFANA_CH_HOST
+      port: 8123
+      protocol: http
+      secure: false
+      username: $INSIGHT_GRAFANA_CH_USER
+      defaultDatabase: serving
+      tlsSkipVerify: false
+    secureJsonData:
+      password: $INSIGHT_GRAFANA_CH_PASSWORD

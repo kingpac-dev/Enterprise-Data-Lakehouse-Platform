@@ -13,7 +13,9 @@ SELECT
     count(distinct customer_id) AS total_customers,
     sum(quantity) AS total_units_sold,
     sum(net_amount) AS total_revenue_amount,
-    round(avg(net_amount), 2) AS average_order_value,
+    -- Provisional catalog definition: revenue per distinct order, not per line.
+    -- Business-owner approval, order identity and upstream deduplication remain required.
+    round(sum(net_amount) / nullif(count(distinct order_id), 0), 2) AS average_order_value,
     now64(3) AS _mart_calculated_at
 FROM {{ ref('silver_orders_cleaned') }}
 WHERE order_status != 'CANCELLED'

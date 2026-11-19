@@ -1,0 +1,18 @@
+version: 2
+
+unit_tests:
+  - name: sales_aov_is_revenue_per_order_not_per_line
+    description: >-
+      Two valid orders have three lines; a cancelled line must not contribute.
+      The expected AOV is 100 / 2 = 50, not the 100 / 3 line average.
+    model: gold_sales_summary
+    given:
+      - input: ref('silver_orders_cleaned')
+        rows:
+          - {order_date: '2026-01-15', branch_id: 1, order_id: 101, customer_id: 10, quantity: 1, net_amount: 60, order_status: COMPLETED}
+          - {order_date: '2026-01-15', branch_id: 1, order_id: 101, customer_id: 10, quantity: 1, net_amount: 20, order_status: COMPLETED}
+          - {order_date: '2026-01-15', branch_id: 1, order_id: 102, customer_id: 11, quantity: 1, net_amount: 20, order_status: SHIPPED}
+          - {order_date: '2026-01-15', branch_id: 1, order_id: 103, customer_id: 12, quantity: 1, net_amount: 900, order_status: CANCELLED}
+    expect:
+      rows:
+        - {order_date: '2026-01-15', branch_id: 1, total_orders: 2, total_customers: 2, total_units_sold: 3, total_revenue_amount: 100, average_order_value: 50}

@@ -36,6 +36,9 @@ jobs:
           - image: serving-api-uat
             context: .
             dockerfile: api/Dockerfile
+          - image: kingpac-insight-uat
+            context: .
+            dockerfile: insight/Dockerfile
           - image: source-mssql-init
             context: datasources
             dockerfile: datasources/Dockerfile.mssql-init
@@ -107,6 +110,18 @@ jobs:
         if: matrix.image == 'clickhouse-uat'
         shell: bash
         run: python governance/policy_linter.py
+
+      - name: Test serving API CORS behavior
+        if: matrix.image == 'serving-api-uat'
+        shell: bash
+        run: |
+          python -m pip install -r api/requirements.txt 'httpx==0.28.1'
+          python -m unittest discover -s api/tests -v
+
+      - name: Test sales AOV semantics offline
+        if: matrix.image == 'dbt-runner-uat'
+        shell: bash
+        run: python -m unittest discover -s dbt/tests_offline -v
 
       - name: Set up isolated Buildx builder
         shell: bash
@@ -303,6 +318,12 @@ jobs:
                 --env CLICKHOUSE_API_PASSWORD=validation-only \
                 "${image_ref}" \
                 -c "import main; from data_quality.reconciliation import DataReconciliationEngine; DataReconciliationEngine()"
+              ;;
+            kingpac-insight-uat)
+              docker run --rm --entrypoint python "${image_ref}" \
+                -c 'import clickhouse_connect, psycopg2, redis; print("BI driver imports OK")'
+              docker run --rm --entrypoint python "${image_ref}" \
+                -m unittest discover -s /app/kingpac/tests -v
               ;;
             source-mssql-init)
               docker run --rm --entrypoint /bin/bash "${image_ref}" \
