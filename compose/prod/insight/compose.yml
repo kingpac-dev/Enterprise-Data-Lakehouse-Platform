@@ -1,0 +1,4 @@
+# Production candidate; external PostgreSQL HA, Redis TLS and Keycloak required.
+name: kingpac-insight-prod
+include:
+  - ../../docker-compose.insight-prod.yml

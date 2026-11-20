@@ -1,0 +1,4 @@
+# Candidate only: single host is DEV/UAT by AGENTS.md, not production HA.
+name: enterprise-lakehouse-prod-single
+include:
+  - ../../docker-compose.prod-single.yml

@@ -1,0 +1,4 @@
+# UAT build definitions only; not a runtime stack.
+name: enterprise-lakehouse-uat-images
+include:
+  - ../../docker-compose.uat-build.yml

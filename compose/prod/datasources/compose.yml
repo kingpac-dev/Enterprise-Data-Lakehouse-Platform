@@ -1,0 +1,4 @@
+# Candidate source systems; optional insight-redis profile is single-node, not HA.
+name: enterprise-lakehouse-prod-datasources
+include:
+  - ../../docker-compose.prod-datasources.yml

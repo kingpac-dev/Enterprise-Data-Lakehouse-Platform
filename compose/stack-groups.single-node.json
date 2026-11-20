@@ -5,20 +5,116 @@
     "uat": {
       "classification": "UAT single-host; not HA",
       "stacks": [
-        {"group": "core", "portainer_name": "lakehouse-uat-core", "compose": "compose/docker-compose.dev.yml", "services": ["minio", "minio-init", "rustfs-permissions", "rustfs", "rustfs-init", "clickhouse", "dbt-runner", "serving-api"]},
-        {"group": "datasources", "portainer_name": "lakehouse-uat-datasources", "compose": "compose/docker-compose.datasources.yml", "services": ["source-postgres", "source-mysql", "source-mssql", "source-mssql-init", "source-mongodb"]},
-        {"group": "streaming", "portainer_name": "lakehouse-uat-streaming", "compose": "compose/docker-compose.streaming.yml", "services": ["redpanda", "redpanda-console"]},
-        {"group": "observability", "portainer_name": "lakehouse-uat-observability", "compose": "compose/docker-compose.observability.yml", "services": ["prometheus", "grafana", "loki"]},
-        {"group": "insight", "portainer_name": "kingpac-insight-uat", "compose": "compose/docker-compose.insight-uat.yml", "services": ["metadata", "cache", "init", "superset"]}
+        {
+          "group": "core",
+          "portainer_name": "lakehouse-uat-core",
+          "compose": "compose/docker-compose.dev.yml",
+          "services": [
+            "minio",
+            "minio-init",
+            "rustfs-permissions",
+            "rustfs",
+            "rustfs-init",
+            "clickhouse",
+            "dbt-runner",
+            "serving-api"
+          ],
+          "grouped_compose": "compose/uat/core/compose.yml"
+        },
+        {
+          "group": "datasources",
+          "portainer_name": "lakehouse-uat-datasources",
+          "compose": "compose/docker-compose.datasources.yml",
+          "services": [
+            "source-postgres",
+            "source-mysql",
+            "source-mssql",
+            "source-mssql-init",
+            "source-mongodb"
+          ],
+          "grouped_compose": "compose/uat/datasources/compose.yml"
+        },
+        {
+          "group": "streaming",
+          "portainer_name": "lakehouse-uat-streaming",
+          "compose": "compose/docker-compose.streaming.yml",
+          "services": [
+            "redpanda",
+            "redpanda-console"
+          ],
+          "grouped_compose": "compose/uat/streaming/compose.yml"
+        },
+        {
+          "group": "observability",
+          "portainer_name": "lakehouse-uat-observability",
+          "compose": "compose/docker-compose.observability.yml",
+          "services": [
+            "prometheus",
+            "grafana",
+            "loki"
+          ],
+          "grouped_compose": "compose/uat/observability/compose.yml"
+        },
+        {
+          "group": "insight",
+          "portainer_name": "kingpac-insight-uat",
+          "compose": "compose/docker-compose.insight-uat.yml",
+          "services": [
+            "metadata",
+            "cache",
+            "init",
+            "superset"
+          ],
+          "grouped_compose": "compose/uat/insight/compose.yml"
+        }
       ]
     },
     "prod-single-candidate": {
       "classification": "Single-host production-named candidate; DEV/UAT classification under AGENTS.md, not eligible for production traffic",
       "stacks": [
-        {"group": "core", "portainer_name": "lakehouse-prod-single", "compose": "compose/docker-compose.prod-single.yml", "services": ["clickhouse"]},
-        {"group": "datasources", "portainer_name": "lakehouse-prod-datasources", "compose": "compose/docker-compose.prod-datasources.yml", "services": ["insight-redis", "source-postgres", "source-mysql", "source-mssql", "source-mssql-init", "source-mongodb"]},
-        {"group": "storage", "portainer_name": "lakehouse-prod-minio", "compose": "compose/docker-compose.prod-minio.yml", "services": ["minio", "minio-init"]},
-        {"group": "insight", "portainer_name": "kingpac-insight-prod", "compose": "compose/docker-compose.insight-prod.yml", "services": ["web", "maintenance"]}
+        {
+          "group": "core",
+          "portainer_name": "lakehouse-prod-single",
+          "compose": "compose/docker-compose.prod-single.yml",
+          "services": [
+            "clickhouse"
+          ],
+          "grouped_compose": "compose/prod/core/compose.single-node.yml"
+        },
+        {
+          "group": "datasources",
+          "portainer_name": "lakehouse-prod-datasources",
+          "compose": "compose/docker-compose.prod-datasources.yml",
+          "services": [
+            "insight-redis",
+            "source-postgres",
+            "source-mysql",
+            "source-mssql",
+            "source-mssql-init",
+            "source-mongodb"
+          ],
+          "grouped_compose": "compose/prod/datasources/compose.yml"
+        },
+        {
+          "group": "storage",
+          "portainer_name": "lakehouse-prod-minio",
+          "compose": "compose/docker-compose.prod-minio.yml",
+          "services": [
+            "minio",
+            "minio-init"
+          ],
+          "grouped_compose": "compose/prod/storage/compose.yml"
+        },
+        {
+          "group": "insight",
+          "portainer_name": "kingpac-insight-prod",
+          "compose": "compose/docker-compose.insight-prod.yml",
+          "services": [
+            "web",
+            "maintenance"
+          ],
+          "grouped_compose": "compose/prod/insight/compose.yml"
+        }
       ]
     }
   }

@@ -1,6 +1,9 @@
 # Environment variables & secrets
 .env
 *.env.local
+# Local Portainer/Compose stack environment files (templates remain tracked).
+Stack.env
+*.Stack.env
 
 # Python
 __pycache__/

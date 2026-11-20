@@ -1,0 +1,82 @@
+name: -uat
+
+# UAT only: a single host is not HA. PostgreSQL and Redis are private to this stack.
+x-insight-env: &insight-env
+  SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?Set a unique strong Superset secret key}
+  INSIGHT_POSTGRES_USER: ${INSIGHT_POSTGRES_USER:-insight}
+  INSIGHT_POSTGRES_DB: ${INSIGHT_POSTGRES_DB:-insight}
+  INSIGHT_POSTGRES_PASSWORD: ${INSIGHT_POSTGRES_PASSWORD:?Set the metadata database password}
+  INSIGHT_HTTPS_ENABLED: ${INSIGHT_HTTPS_ENABLED:-false}
+
+services:
+  metadata:
+    image: ${INSIGHT_POSTGRES_IMAGE:-postgres:16.16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f}
+    environment:
+      POSTGRES_USER: ${INSIGHT_POSTGRES_USER:-insight}
+      POSTGRES_DB: ${INSIGHT_POSTGRES_DB:-insight}
+      POSTGRES_PASSWORD: ${INSIGHT_POSTGRES_PASSWORD:?Set the metadata database password}
+    volumes:
+      - insight_metadata:/var/lib/postgresql/data
+    networks: [insight_private]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  cache:
+    image: ${INSIGHT_REDIS_IMAGE:-redis:7.4.12@sha256:2e3eb11462c4e3759e6972678dd051d150ff54b1e60714b3c33b701260172a90}
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [insight_private]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  init:
+    image: ${INSIGHT_SUPERSET_IMAGE:?Set INSIGHT_SUPERSET_IMAGE to the built UAT image}
+    command: ["bash", "/app/kingpac/init.sh"]
+    environment:
+      <<: *insight-env
+      INSIGHT_ADMIN_USERNAME: ${INSIGHT_ADMIN_USERNAME:?Set the initial admin username}
+      INSIGHT_ADMIN_EMAIL: ${INSIGHT_ADMIN_EMAIL:?Set the initial admin email}
+      # Required only while creating a new initial admin; remove it afterwards.
+      INSIGHT_ADMIN_PASSWORD: ${INSIGHT_ADMIN_PASSWORD:-}
+    networks: [insight_private]
+    depends_on:
+      metadata:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    restart: "no"
+
+  superset:
+    image: ${INSIGHT_SUPERSET_IMAGE:?Set INSIGHT_SUPERSET_IMAGE to the built UAT image}
+    environment: *insight-env
+    ports:
+      - "127.0.0.1:${INSIGHT_PORT:-18088}:8088"
+    networks: [insight_private, lakehouse]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8088/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+networks:
+  insight_private:
+    internal: true
+  lakehouse:
+    name: ${INTEGRATION_NETWORK:-lakehouse-uat-integration}
+    external: true
+
+volumes:
+  insight_metadata:

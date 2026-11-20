@@ -1,5 +1,7 @@
 # KingPac Enterprise Insight Platform — Solution Architecture
 
+ดู [Architecture Review โดย Software และ Data Warehouse specialists](KINGPAC_ENTERPRISE_ARCHITECTURE_REVIEW.md) สำหรับ trust boundaries, data correctness, P0 gaps, NFRs และแผนตรวจรับที่อ้างอิง source code.
+
 **สถานะ:** แบบเป้าหมายสำหรับองค์กร พร้อม implementation ตั้งต้นเพื่อ UAT; ยังไม่ใช่ production deployment หรือหลักฐานการทดสอบระบบจริง
 
 KingPac Enterprise Insight Platform เป็นชั้น Enterprise BI บน Apache Superset ที่ใช้ Enterprise Data Lakehouse Platform เดิมเป็นแหล่งข้อมูลกลาง: source systems → ingestion → ClickHouse `raw`/`core`/`mart`/`serving` → governed datasets, charts และ dashboards. Grafana ยังคงใช้สำหรับ observability ของระบบ ส่วน Superset ใช้สำหรับการวิเคราะห์ทางธุรกิจ

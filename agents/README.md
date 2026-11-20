@@ -2,6 +2,8 @@
 
 This directory contains the working briefs for specialist engineering assistants. `AGENTS.md` is authoritative if a brief differs from it. The design baseline and human ownership model remain in [DOC-07](../docs/07_Enterprise_Data_Lakehouse_AI_Agent_Team_and_Skills.md). Use the [production readiness worklist](../docs/PRODUCTION_READINESS_SPECIALIST_WORKLIST.md) to select evidence-backed work; an agent title does not imply a running service or a production approval.
 
+For the combined A13/A14 assessment and implementation gates, see [KingPac Enterprise Architecture Review](../docs/architecture/KINGPAC_ENTERPRISE_ARCHITECTURE_REVIEW.md).
+
 | ID | Specialist brief | Owns | Independent challenge |
 | --- | --- | --- | --- |
 | A00 | [Orchestrator](orchestrator.md) | scope, sequence, risk and approval log | A08; human owner |
@@ -17,6 +19,8 @@ This directory contains the working briefs for specialist engineering assistants
 | A10 | [BI/data product](bi-data-product.md) | KPI semantics, serving acceptance | A02/A08; data owner |
 | A11 | [Capacity/FinOps](capacity-finops.md) | sizing, workload cost, benchmark | A03/A07/A08; budget owner |
 | A12 | [API and AI application](api-ai-application.md) | API contracts, authorization, AI evaluation | A06/A08; product owner |
+| A13 | [Software architecture](software-architecture.md) | software quality, integration, security boundaries and NFRs | A01/A06/A08; platform owner |
+| A14 | [Data warehouse architecture](data-warehouse-architecture.md) | dimensional models, data contracts, correctness and warehouse performance | A02/A03/A08/A10; data owner |
 
 ## Workflow for every change
 

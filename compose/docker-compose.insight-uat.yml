@@ -11,6 +11,8 @@ x-insight-env: &insight-env
 services:
   metadata:
     image: ${INSIGHT_POSTGRES_IMAGE:-postgres:16.16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f}
+    ports:
+      - "127.0.0.1:${INSIGHT_POSTGRES_PUBLISHED_PORT:-15433}:5432"
     environment:
       POSTGRES_USER: ${INSIGHT_POSTGRES_USER:-insight}
       POSTGRES_DB: ${INSIGHT_POSTGRES_DB:-insight}
@@ -28,6 +30,8 @@ services:
   cache:
     image: ${INSIGHT_REDIS_IMAGE:-redis:7.4.12@sha256:2e3eb11462c4e3759e6972678dd051d150ff54b1e60714b3c33b701260172a90}
     command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${INSIGHT_REDIS_PUBLISHED_PORT:-16380}:6379"
     networks: [insight_private]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -57,7 +61,7 @@ services:
     image: ${INSIGHT_SUPERSET_IMAGE:?Set INSIGHT_SUPERSET_IMAGE to the built UAT image}
     environment: *insight-env
     ports:
-      - "127.0.0.1:${INSIGHT_PORT:-18088}:8088"
+      - "${INSIGHT_BIND_IP:-127.0.0.1}:${INSIGHT_PORT:-18088}:8088"
     networks: [insight_private, lakehouse]
     depends_on:
       init:

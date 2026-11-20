@@ -1,0 +1,4 @@
+# Candidate single-host MinIO, not independent backup or HA.
+name: enterprise-lakehouse-prod-minio
+include:
+  - ../../docker-compose.prod-minio.yml
