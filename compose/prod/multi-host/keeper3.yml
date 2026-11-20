@@ -1,0 +1,4 @@
+# Production HA candidate, Keeper 3. Do not deploy before readiness gates.
+name: enterprise-lakehouse-prod-keeper3
+include:
+  - ../../docker-compose.prod-keeper3.yml

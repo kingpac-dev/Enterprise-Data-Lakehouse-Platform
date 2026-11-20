@@ -1,0 +1,4 @@
+# Production HA candidate, node 1. Do not deploy before readiness gates.
+name: enterprise-lakehouse-prod-node1
+include:
+  - ../../docker-compose.prod-node1.yml

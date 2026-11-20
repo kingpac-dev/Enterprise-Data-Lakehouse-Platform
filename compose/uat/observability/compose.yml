@@ -1,0 +1,4 @@
+# UAT observability; optional BI overlay remains a separate merge file.
+name: enterprise-lakehouse-observability
+include:
+  - ../../docker-compose.observability.yml

@@ -1,0 +1,4 @@
+# UAT Apache Superset, metadata and cache.
+name: kingpac-insight-uat
+include:
+  - ../../docker-compose.insight-uat.yml

@@ -1,0 +1,4 @@
+# UAT core: canonical definition is retained at its existing Git path.
+name: enterprise-lakehouse-uat-core
+include:
+  - ../../docker-compose.dev.yml

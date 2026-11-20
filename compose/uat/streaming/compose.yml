@@ -1,0 +1,4 @@
+# UAT streaming; explicitly preserve the real Portainer stack project name when migrating.
+name: lakehouse-uat-streaming
+include:
+  - ../../docker-compose.streaming.yml

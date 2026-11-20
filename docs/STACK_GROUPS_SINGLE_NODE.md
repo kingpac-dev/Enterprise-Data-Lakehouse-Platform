@@ -1,5 +1,7 @@
 # การจัดกลุ่ม Portainer Stack — UAT และ Production Single-Node Candidate
 
+**Grouped Compose paths:** ดู [รายการไดเรกทอรีและ mapping ใหม่](../compose/README.md). ตารางด้านล่างเก็บ path เดิมซึ่งยังคงใช้งานได้; ก่อนเปลี่ยน path ใน Portainer ต้องตรวจ compatibility กับ `include`, effective project name และ volume ตามคู่มือใหม่
+
 เอกสารนี้เป็นทะเบียนและแผนจัดกลุ่มจากไฟล์ใน repository ณ 19 พฤศจิกายน 2026 **ไม่ใช่รายการ live ที่ตรวจจาก Portainer**. ดูทะเบียนที่ตรวจด้วยเครื่องได้ใน [stack-groups.single-node.json](../compose/stack-groups.single-node.json). คงชื่อ Compose, container และ volume เดิมไว้เพื่อไม่ให้การจัดกลุ่มเปลี่ยน identity ของข้อมูลโดยไม่ตั้งใจ
 
 > **นโยบาย:** ตาม [AGENTS.md](../AGENTS.md) single-host จัดเป็น DEV/UAT สำหรับ functional testing และ benchmarking แม้ไฟล์หรือ environment จะมีชื่อ `prod`; ไม่อนุญาตให้ใช้เป็น production HA หรือเปิดรับ production traffic. Production ต้องผ่านข้อกำหนด 3 failure domains, review และ human sign-off. ดู [production gate](../runbooks/04_portainer_prod_deployment.md).

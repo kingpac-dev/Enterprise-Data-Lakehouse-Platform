@@ -9,6 +9,10 @@
 .env
 .env.*
 !.env.example
+Stack.env
+**/Stack.env
+*.Stack.env
+**/*.Stack.env
 *.log
 *.png
 *.webp

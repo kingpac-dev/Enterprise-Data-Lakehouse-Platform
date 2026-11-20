@@ -1,0 +1,4 @@
+# UAT synthetic/masked source systems.
+name: enterprise-lakehouse-uat-datasources
+include:
+  - ../../docker-compose.datasources.yml

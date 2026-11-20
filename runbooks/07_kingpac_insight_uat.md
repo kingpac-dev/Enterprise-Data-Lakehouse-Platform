@@ -26,6 +26,8 @@ docker build -f insight/Dockerfile -t kingpac-insight-superset:uat-6.1.0 .
 
 ## 3. Environment และ Portainer
 
+ใช้ [Stack.env template และคำแนะนำ](../deployment/kingpac-insight/README.md) เพื่อเตรียมค่าของ UAT แยกจาก production; template ตั้ง port ตัวอย่าง 18089 เพื่อลดปัญหาชน Redpanda Console โดยต้องตรวจ port ที่ host จริง
+
 กำหนดค่าผ่าน Portainer/secret manager หรือไฟล์นอก Git ที่จำกัดสิทธิ์ผู้ดูแล (`chmod 600`). ตัวอย่างชื่อคีย์ด้านล่างเป็นชื่อ configuration เท่านั้น ไม่ใช่ secret values:
 
 | Key | ค่า/การตัดสินใจ |
@@ -34,12 +36,25 @@ docker build -f insight/Dockerfile -t kingpac-insight-superset:uat-6.1.0 .
 | `SUPERSET_SECRET_KEY` | ค่าสุ่มยาวจาก secret manager; สำรองแยกอย่างปลอดภัยและคงค่าเดิมเมื่อ restart |
 | `INSIGHT_POSTGRES_PASSWORD` | รหัสผ่าน PostgreSQL metadata; ห้ามเปลี่ยนค่า env แล้วคาดหวังว่า PostgreSQL volume เดิมเปลี่ยนรหัสผ่านเอง |
 | `INSIGHT_POSTGRES_USER`, `INSIGHT_POSTGRES_DB` | ค่าเริ่มต้น `insight`; ตั้งก่อนสร้าง volume และอย่าเปลี่ยนโดยไม่มีแผน migration |
+| `INSIGHT_POSTGRES_PUBLISHED_PORT` | PostgreSQL metadata host port; default `15433`, bind เฉพาะ host loopback |
+| `INSIGHT_REDIS_PUBLISHED_PORT` | Redis cache host port; default `16380`, bind เฉพาะ host loopback |
 | `INSIGHT_ADMIN_USERNAME`, `INSIGHT_ADMIN_EMAIL` | UAT bootstrap admin ที่กำหนดโดยผู้ดูแล |
 | `INSIGHT_ADMIN_PASSWORD` | รหัสผ่านเริ่มต้น อย่างน้อย 16 ตัว; เมื่อ account มีอยู่แล้ว init จะไม่แก้/หมุนรหัสผ่าน สามารถนำตัวแปรนี้ออกหลัง bootstrap |
 | `INSIGHT_PORT` | host loopback port; default `18088` |
+| `INSIGHT_BIND_IP` | default `127.0.0.1`; optional approved private host interface IP for UAT access after network/TLS review |
 | `INSIGHT_HTTPS_ENABLED` | `false` สำหรับการทดสอบผ่าน localhost; `true` หลัง trusted TLS proxy พร้อมและทดสอบแล้ว |
 | `INTEGRATION_NETWORK` | ค่า default `lakehouse-uat-integration`; เปลี่ยนเฉพาะกรณี UAT network ชื่ออื่น |
 | `INSIGHT_POSTGRES_IMAGE`, `INSIGHT_REDIS_IMAGE` | optional override เป็น approved pinned image/digest |
+
+**เข้าเว็บจากเครื่องอื่นไม่ได้แต่ `/health` ใน container ตอบ 200:** `127.0.0.1` ใน published port หมายถึง loopback ของ Docker host ไม่ใช่ของเครื่องผู้ใช้. ตรวจ `docker port <superset-container>`, `ss -lnt` และ `curl -fsS http://127.0.0.1:<INSIGHT_PORT>/health` บน host; endpoint 200 ใน container ยังไม่พิสูจน์ host listener หรือ firewall. สำหรับทดสอบชั่วคราวใช้ SSH tunnel จากเครื่องผู้ใช้ เช่น `ssh -L 18089:127.0.0.1:18089 <user>@<uat-host>` แล้วเปิด `http://127.0.0.1:18089` บนเครื่องผู้ใช้. สำหรับผู้ใช้หลายคนให้ใช้ approved TLS reverse proxy และ allowlist; proxy ต้องเชื่อม host loopback ได้และล้าง forwarded headers ที่ client ส่งมา
+
+**PostgreSQL/Redis จากเครื่องอื่น:** Compose รุ่นนี้ publish PostgreSQL เป็น `127.0.0.1:15433:5432` และ Redis เป็น `127.0.0.1:16380:6379` บน Docker host (ปรับ host ports ได้ผ่าน variables ข้างต้น). ให้ผู้มีสิทธิ์ใช้ approved SSH tunnel, เช่น `ssh -N -L 15433:127.0.0.1:15433 -L 16380:127.0.0.1:16380 <user>@<uat-host>`, แล้วเชื่อมจากเครื่องตนเองที่ `127.0.0.1` ตาม ports นั้น. ต้องมี SSH access และ TCP forwarding policy ที่อนุมัติ; user/host, host key และ ports จริง TBD. ห้ามเปิด direct LAN bind: Redis UAT ไม่มี authentication/TLS และ PostgreSQL path นี้ไม่ได้ตั้ง TLS. จำกัดสิทธิ์ SSH/Docker host เพราะผู้เข้าถึง loopback อาจเข้าถึง Redis ได้โดยไม่ต้องใช้รหัสผ่าน และไม่ใช้ service เหล่านี้กับข้อมูลที่ไม่ได้รับอนุญาต
+
+Ports เหล่านี้ไม่มีผลกับ Docker-internal connections `metadata:5432` และ `cache:6379`. ก่อน redeploy ตรวจ port collision ด้วย `ss -lnt` บน host และ Git ref ใน Portainer ต้องมี Compose revision นี้. การเพิ่ม published ports อาจทำให้ Compose recreate containers; snapshot/backup metadata พร้อม key ก่อนเปลี่ยน, ห้ามลบ volume. Rollback เป็น Git ref ก่อนเปลี่ยนหรือปิด port mapping ตาม change plan; กลับไปใช้ภายใน Docker network โดยไม่ลบ data
+
+หากทีม Network/Security อนุมัติการ bind private interface สำหรับ UAT เท่านั้น รุ่น Compose ที่รองรับ `INSIGHT_BIND_IP` สามารถกำหนดเป็น **IP ของ interface บน Docker host ที่ตรวจแล้ว** และ redeploy Git-backed stack หลัง review; ห้ามตั้งเป็น `0.0.0.0` โดยไม่มีการอนุมัติ. การ bind private IP ไม่ได้เปิด TLS และ Docker published-port filtering ต้องทดสอบจริง; กำหนด source restrictions และใช้ HTTPS ที่ trusted proxy สำหรับ credentials. ตรวจ registry/Git ref ที่ Portainer ใช้มีการเปลี่ยนแปลง Compose นี้ก่อน: env variable เพียงอย่างเดียวไม่มีผลกับ Compose revision เดิม. Rollback โดยนำ `INSIGHT_BIND_IP` ออกหรือคืนค่า `127.0.0.1` และ redeploy revision เดิม; ไม่ลบ volumes
+
+**กรณี `redis-server: executable file not found`:** ตรวจว่าไม่ได้กำหนด `INSIGHT_REDIS_IMAGE` เป็น Superset image; ลบ override นี้เพื่อใช้ Redis default ที่ pin แล้ว และลบ `INSIGHT_POSTGRES_IMAGE` หากกำหนดเป็น Superset imageเช่นกัน. ตรวจว่า registry สามารถ pull default images ได้. ก่อน retry ให้ตรวจ stack/containers/volume ที่อาจสร้างค้าง และห้ามลบ metadata volume โดยไม่ตรวจสอบ. หากเป็น initial admin ใหม่ รหัสผ่านต้องยาวอย่างน้อย 16 ตัวอักษร; การแก้ environment อย่างเดียวไม่เปลี่ยนรหัสผ่าน PostgreSQL หรือ admin ที่สร้างแล้ว
 
 ใน Portainer สร้าง stack ใหม่จาก Git repository/ref ที่ผ่าน review โดยใช้ Compose path `compose/docker-compose.insight-uat.yml`. ใส่ environment ผ่านช่องที่เข้าถึงได้เฉพาะผู้ดูแล; อย่าใส่ secret ใน URL หรือ commit. ก่อน deploy ตรวจว่า external integration network มีอยู่แล้วบน Docker endpoint เดียวกัน และ image ใน registry มีสิทธิ์ pull. การ deploy stack นี้ไม่ควรสร้างหรือเปลี่ยน ClickHouse volume
 

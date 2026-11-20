@@ -44,6 +44,8 @@ Security review of the source candidate remains required: its MySQL command expl
 
 ## Inputs and preparation
 
+Use the [separate production Stack.env template](../deployment/kingpac-insight/README.md); it contains secret **file paths only**, not the secrets or connection strings themselves. The file does not provision external services or constitute deployment approval.
+
 All actual values are TBD and must come from responsible owners, never Git or build arguments:
 
 - `INSIGHT_PROD_IMAGE`: Harbor image **by sha256 digest**, built from a reviewed base also pinned by digest. The local validation tag is not an approved image. CI must build, scan with Trivy, review findings and publish through the existing Jenkins/Harbor process. Compose itself cannot enforce digest format; preflight checks it.
