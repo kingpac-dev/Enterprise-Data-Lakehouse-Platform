@@ -163,6 +163,12 @@ jobs:
           for attempt in $(seq 1 "${max_attempts}"); do
             if docker pull "${MINIO_SMOKE_IMAGE}"; then
               echo "MinIO image pulled successfully (attempt ${attempt})."
+              if ! docker run --rm --entrypoint minio "${MINIO_SMOKE_IMAGE}" --version >/dev/null || \
+                 ! docker run --rm --entrypoint mc "${MINIO_SMOKE_IMAGE}" --version >/dev/null; then
+                echo "::error::MINIO_SMOKE_IMAGE must contain both the MinIO server and mc client binaries. Check the repository variable and approved digest." >&2
+                exit 1
+              fi
+              echo "MinIO server and mc client binaries are available."
               exit 0
             fi
             echo "Pull attempt ${attempt}/${max_attempts} failed. Retrying in 10s..." >&2
